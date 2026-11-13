@@ -52,3 +52,49 @@ footer .sync+button{margin-left:0}
 nav a{white-space:nowrap}
 @media(max-width:620px){nav{gap:20px;overflow-x:auto}.formGrid{grid-template-columns:1fr}.offerInputs{grid-template-columns:1fr 1fr}.gate{margin:18px auto 40px;padding:22px}.sync{margin-left:0;flex-basis:100%;order:3}.ideas{grid-template-columns:1fr}}
 .controls .primary{background:var(--ink);border-color:var(--ink);color:white}
+
+/* ---- Phone polish (iPhone-first) ---- */
+html{-webkit-text-size-adjust:100%}
+body{-webkit-tap-highlight-color:transparent}
+.tabs{margin:-6px 0 20px}
+.photo.bare{height:74px}
+.photo.bare .noPhoto{font-size:34px}
+.comparebar.live{position:sticky;bottom:12px;z-index:2;box-shadow:0 6px 22px #213f3430}
+header{padding-top:env(safe-area-inset-top)}
+.bar,main,footer{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+@media(max-width:620px){
+  /* 16px inputs stop iOS Safari zooming the page on focus */
+  input,select,textarea,.field input,.field textarea,.field select,.composer textarea{font-size:16px}
+  body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
+  /* Page links become a thumb-reach tab bar */
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:5;width:auto;gap:0;overflow:visible;background:#fcfbf6f2;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav a{flex:1;justify-items:center;min-height:56px;font-size:13px;padding-top:0;border-bottom:0;border-top:3px solid transparent;color:var(--sub)}
+  nav a[aria-current=page]{border-color:#57775d;color:var(--ink)}
+  .logo{height:50px}
+  /* Category tabs scroll sideways instead of stacking */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px 16px;padding:2px 16px;scroll-padding:0 16px}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs button{flex:none;white-space:nowrap}
+  .controls button,.ghost,.action,.textbtn,.primary{min-height:44px}
+  .rowDel,.fav{width:44px;height:44px}
+  input[type=checkbox]{width:22px;height:22px}
+  .checkLabel{min-height:44px}
+  .photo{height:190px}
+  .comparebar.live{bottom:calc(66px + env(safe-area-inset-bottom))}
+  #notice:not(:empty){left:16px;right:16px;bottom:calc(70px + env(safe-area-inset-bottom));text-align:center}
+  /* Dialogs slide up as a sheet */
+  dialog{margin:auto 0 0;width:100%;max-width:100%;max-height:90dvh;border-radius:18px 18px 0 0;border-width:1px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+  .dialogTop{position:sticky;top:-16px;margin:-16px -16px 12px;padding:14px 16px 10px;background:var(--cream);z-index:1}
+  .dialogTop button{width:40px;height:40px;flex:none}
+  dl{grid-template-columns:1fr;gap:2px}
+  dd{margin-bottom:10px}
+  .newItem select,.newItem .primary{flex:1}
+  footer{padding-bottom:16px}
+}
+@media(max-width:620px){
+  /* Keep the welcome banner short so the lists start near the top */
+  .banner .art,.intro p,.heroLink{display:none}
+  .intro{padding:16px 18px}
+  .intro h1{font-size:34px;margin:6px 0 0}
+  .intro h1 br{display:none!important}
+}

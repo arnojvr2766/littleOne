@@ -1,0 +1,13 @@
+{
+  "name": "The Little List",
+  "short_name": "Little List",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#faf9f4",
+  "theme_color": "#f8f7f0",
+  "icons": [
+    { "src": "assets/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

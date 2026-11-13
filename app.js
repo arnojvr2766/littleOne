@@ -15,7 +15,7 @@ const me = '';
 let entries = [], urls = {};
 try { const c = JSON.parse(store.get('ll-cache')); if (c) { entries = c.entries || []; urls = c.urls || {} } } catch {}
 const selected = new Set();
-let favouritesOnly = false, specialsOnly = false, category = 'all', pending = [], stale = false, lastSync = 0, offline = false;
+let favouritesOnly = false, specialsOnly = false, category = store.get('ll-cat') || 'all', pending = [], stale = false, lastSync = 0, offline = false;
 
 const $ = s => document.querySelector(s);
 const view = $('#view'), dlg = $('#dialog');
@@ -109,7 +109,7 @@ function imageTag(p, cls = '') {
 }
 function card(p, i) {
   const d = p.data, o = lowest(p), fav = !!d.fav, save = o && o.old > o.price;
-  return '<article class="card"><div class="photo" style="--tone:' + tones[i % 3] + '">' + imageTag(p) + (save ? '<span class="sale">Save ' + money(o.old - o.price) + '</span>' : '') +
+  return '<article class="card"><div class="photo' + (photoOf(p) ? '' : ' bare') + '" style="--tone:' + tones[i % 3] + '">' + imageTag(p) + (save ? '<span class="sale">Save ' + money(o.old - o.price) + '</span>' : '') +
     '<button class="fav ' + (fav ? 'on' : '') + '" aria-label="Shortlist ' + esc(d.name) + '" aria-pressed="' + fav + '" data-fav="' + esc(p.id) + '">' + (fav ? '♥' : '♡') + '</button></div><div class="cardBody">' +
     (category === 'all' && categories().length > 1 && d.category ? '<span class="catTag">' + esc(d.category) + '</span>' : '') +
     '<span class="brand">' + esc(d.brand) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.feature) + '</p><div class="priceline">' +
@@ -122,9 +122,9 @@ function compare() {
   const all = products(), favs = all.filter(p => p.data.fav).length;
   const chosen = all.filter(p => (category === 'all' || p.data.category === category) && (!favouritesOnly || p.data.fav))
     .sort((a, b) => (a.data.category || '').localeCompare(b.data.category || ''));
-  return '<section class="section"><div class="sectionHead"><div><h2>' + esc(category === 'all' ? (cats.length === 1 ? cats[0] : 'The big purchases') : category) + '</h2><p>Compare the options side by side, with the price at each shop.</p></div><div class="controls">' +
-    (cats.length > 1 ? '<button data-cat="all" class="' + (category === 'all' ? 'active' : '') + '">Everything</button>' + cats.map(c => '<button data-cat="' + esc(c) + '" class="' + (category === c ? 'active' : '') + '">' + esc(c) + '</button>').join('') : '') +
-    '<button data-filter="saved" aria-pressed="' + favouritesOnly + '" class="' + (favouritesOnly ? 'active' : '') + '">♡ Shortlist (' + favs + ')</button><button class="primary" id="addProduct">+ Add an option</button></div></div><div class="grid">' +
+  return '<section class="section"><div class="sectionHead"><div><h2>' + esc(category === 'all' ? (cats.length === 1 ? cats[0] : 'The big purchases') : category) + '</h2><p>Compare the options side by side, with the price at each shop.</p></div><div class="controls"><button data-filter="saved" aria-pressed="' + favouritesOnly + '" class="' + (favouritesOnly ? 'active' : '') + '">♡ Shortlist (' + favs + ')</button><button class="primary" id="addProduct">+ Add an option</button></div></div>' +
+    (cats.length > 1 ? '<div class="controls tabs" role="group" aria-label="Categories"><button data-cat="all" class="' + (category === 'all' ? 'active' : '') + '">Everything</button>' + cats.map(c => '<button data-cat="' + esc(c) + '" class="' + (category === c ? 'active' : '') + '">' + esc(c) + '</button>').join('') + '</div>' : '') +
+    '<div class="grid">' +
     chosen.map((p, i) => card(p, i)).join('') + '</div>' +
     (!chosen.length ? '<p class="empty">' + (favouritesOnly ? 'Tap the heart on an option to add it to your shortlist.' : 'Nothing here yet. Add the first option to compare.') + '</p>' : '') +
     '<div class="comparebar"><span id="count"></span><button id="compareBtn" class="primary">Compare side by side →</button></div></section>';
@@ -132,7 +132,7 @@ function compare() {
 function counter() {
   const b = $('#compareBtn'); if (!b) return;
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
-  b.disabled = selected.size < 2;
+  b.disabled = selected.size < 2; $('.comparebar').classList.toggle('live', selected.size > 0);
   $('#count').textContent = selected.size ? selected.size + ' option' + (selected.size === 1 ? '' : 's') + ' selected' : 'Select at least two options';
 }
 function offerRow(p, o, thumb = true) {
@@ -260,7 +260,7 @@ function render() {
   if (!token) { $('.banner').classList.add('hidden'); view.innerHTML = gate(); return }
   view.innerHTML = key === 'offers' ? offers() : key === 'checklist' ? checklist() : key === 'ideas' ? ideas() : compare();
   document.querySelectorAll('nav a').forEach(a => { if (a.hash === '#' + key) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current') });
-  $('.banner').classList.toggle('hidden', key !== 'compare'); counter(); if (key === 'ideas') drawPending();
+  $('.banner').classList.toggle('hidden', key !== 'compare'); counter(); document.querySelector('.tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' }); if (key === 'ideas') drawPending();
 }
 function openDialog(label, body) { $('#dialogLabel').textContent = label; $('#dialogBody').innerHTML = body; if (!dlg.open) dlg.showModal() }
 function rerenderFocused(selector) { render(); document.querySelector(selector)?.focus({ preventScroll: true }) }
@@ -270,7 +270,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
   if (d.fav) { const p = byId(d.fav); put({ ...p, data: { ...p.data, fav: !p.data.fav } }); rerenderFocused(sel('data-fav', d.fav)) }
   else if (d.filter) { favouritesOnly = !favouritesOnly; rerenderFocused('[data-filter]') }
-  else if (d.cat) { category = d.cat; rerenderFocused(sel('data-cat', d.cat)) }
+  else if (d.cat) { category = d.cat; store.set('ll-cat', category); rerenderFocused(sel('data-cat', d.cat)); document.querySelector('.tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' }) }
   else if (d.offers) { specialsOnly = d.offers === 'sale'; rerenderFocused(sel('data-offers', d.offers)) }
   else if (d.details) detail(d.details);
   else if (d.edit) productForm(d.edit);
