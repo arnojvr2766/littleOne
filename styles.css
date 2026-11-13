@@ -98,3 +98,9 @@ header{padding-top:env(safe-area-inset-top)}
   .intro h1{font-size:34px;margin:6px 0 0}
   .intro h1 br{display:none!important}
 }
+.stock{margin-left:auto;font-size:12px;font-weight:600;color:var(--sub);background:#eef0e8;border-radius:5px;padding:3px 8px;white-space:nowrap}
+.stock.in{color:#2c5a3c;background:#dfeadb}
+.stock.out{color:#8c2f1b;background:#f8e5d5}
+.detailPhoto{background:#f1f3ec;border-radius:10px;display:grid;place-items:center;height:220px;margin-bottom:14px}
+.detailPhoto img{max-height:200px;max-width:90%;object-fit:contain;mix-blend-mode:multiply}
+.cmpPhoto{width:120px;height:110px;object-fit:contain;mix-blend-mode:multiply;display:block}

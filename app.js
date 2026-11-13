@@ -107,13 +107,18 @@ function imageTag(p, cls = '') {
   const src = photoOf(p);
   return src ? '<img class="' + cls + '" src="' + esc(src) + '" alt="' + esc(title(p)) + '" loading="lazy">' : '<span class="noPhoto ' + cls + '" aria-hidden="true">' + esc((p.data.name || '?')[0].toUpperCase()) + '</span>';
 }
+const stockTag = d => d.stock === 'in' ? '<span class="stock in">In stock in SA</span>' : d.stock === 'out' ? '<span class="stock out">Out of stock</span>' : d.stock === 'unknown' ? '<span class="stock">Stock not confirmed</span>' : '';
+const specOrder = ['Style', 'Good for running', 'Availability', 'Pram weight', 'Folded size', 'Fold', 'Newborn walks', 'Suitable for', 'Includes', 'Type', 'Standard'];
+const rank = k => { const i = specOrder.indexOf(k); return i < 0 ? 99 : i };
+const specKeys = ps => [...new Set(ps.flatMap(p => Object.keys(p.data.specs || {})))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+const stockRank = d => ({ in: 0, unknown: 1, out: 2 }[d.stock] ?? 1);
 function card(p, i) {
   const d = p.data, o = lowest(p), fav = !!d.fav, save = o && o.old > o.price;
   return '<article class="card"><div class="photo' + (photoOf(p) ? '' : ' bare') + '" style="--tone:' + tones[i % 3] + '">' + imageTag(p) + (save ? '<span class="sale">Save ' + money(o.old - o.price) + '</span>' : '') +
     '<button class="fav ' + (fav ? 'on' : '') + '" aria-label="Shortlist ' + esc(d.name) + '" aria-pressed="' + fav + '" data-fav="' + esc(p.id) + '">' + (fav ? '♥' : '♡') + '</button></div><div class="cardBody">' +
     (category === 'all' && categories().length > 1 && d.category ? '<span class="catTag">' + esc(d.category) + '</span>' : '') +
     '<span class="brand">' + esc(d.brand) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.feature) + '</p><div class="priceline">' +
-    (o ? '<span class="price">' + money(o.price) + '</span>' + (save ? '<del>' + money(o.old) + '</del>' : '') : '<span class="small">No price yet</span>') +
+    (o ? '<span class="price">' + money(o.price) + '</span>' + (save ? '<del>' + money(o.old) + '</del>' : '') : '<span class="small">No price yet</span>') + stockTag(d) +
     '</div><div class="cardActions"><label class="checkLabel"><input type="checkbox" data-compare="' + esc(p.id) + '" ' + (selected.has(p.id) ? 'checked' : '') + '>Compare</label><button class="textbtn" data-details="' + esc(p.id) + '">Specs &amp; prices ↗</button></div></div></article>';
 }
 function categories() { return [...new Set(products().map(p => p.data.category).filter(Boolean))].sort() }
@@ -121,7 +126,7 @@ function compare() {
   const cats = categories(); if (category !== 'all' && !cats.includes(category)) category = 'all';
   const all = products(), favs = all.filter(p => p.data.fav).length;
   const chosen = all.filter(p => (category === 'all' || p.data.category === category) && (!favouritesOnly || p.data.fav))
-    .sort((a, b) => (a.data.category || '').localeCompare(b.data.category || ''));
+    .sort((a, b) => (a.data.category || '').localeCompare(b.data.category || '') || (b.data.specs?.Style === 'Jogging pram') - (a.data.specs?.Style === 'Jogging pram') || stockRank(a.data) - stockRank(b.data) || (lowest(a)?.price ?? 1e9) - (lowest(b)?.price ?? 1e9));
   return '<section class="section"><div class="sectionHead"><div><h2>' + esc(category === 'all' ? (cats.length === 1 ? cats[0] : 'The big purchases') : category) + '</h2><p>Compare the options side by side, with the price at each shop.</p></div><div class="controls"><button data-filter="saved" aria-pressed="' + favouritesOnly + '" class="' + (favouritesOnly ? 'active' : '') + '">♡ Shortlist (' + favs + ')</button><button class="primary" id="addProduct">+ Add an option</button></div></div>' +
     (cats.length > 1 ? '<div class="controls tabs" role="group" aria-label="Categories"><button data-cat="all" class="' + (category === 'all' ? 'active' : '') + '">Everything</button>' + cats.map(c => '<button data-cat="' + esc(c) + '" class="' + (category === c ? 'active' : '') + '">' + esc(c) + '</button>').join('') + '</div>' : '') +
     '<div class="grid">' +
@@ -146,8 +151,8 @@ function offers() {
     '<p class="hint">A special shows the shop’s advertised previous price. Open the listing to confirm today’s price, colour and stock.</p></section>';
 }
 function detail(id) {
-  const p = byId(id); if (!p) return; const d = p.data, specs = Object.entries(d.specs || {});
-  openDialog(title(p), '<p>' + esc(d.feature) + '</p>' + (specs.length ? '<dl>' + specs.map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '') +
+  const p = byId(id); if (!p) return; const d = p.data, specs = specKeys([p]).map(k => [k, d.specs[k]]);
+  openDialog(title(p), (photoOf(p) ? '<div class="detailPhoto">' + imageTag(p) + '</div>' : '') + '<p>' + esc(d.feature) + '</p>' + (specs.length ? '<dl>' + specs.map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '') +
     link(d.source, 'Product page') + '<h3 style="margin-top:23px">Shop prices</h3>' +
     ((d.offers || []).length ? d.offers.map(o => offerRow(p, o, false)).join('') : '<p class="small">No shop prices saved yet.</p>') +
     '<p class="hint">' + (d.checked ? 'Prices checked ' + longDate(d.checked) + '. ' : '') + 'Confirm the local model and required accessories with the shop.' + '</p>' +
@@ -155,10 +160,10 @@ function detail(id) {
 }
 function comparison() {
   const ps = products().filter(p => selected.has(p.id));
-  const keys = [...new Set(ps.flatMap(p => Object.keys(p.data.specs || {})))];
+  const keys = specKeys(ps);
   const row = (label, field) => '<tr><th scope="row">' + esc(label) + '</th>' + ps.map(p => '<td>' + field(p) + '</td>').join('') + '</tr>';
   openDialog('Side-by-side comparison', '<div class="tableWrap" tabindex="0" aria-label="Comparison, scroll sideways on a phone"><table class="comparison"><thead><tr><th scope="col">Option</th>' + ps.map(p => '<th scope="col">' + esc(title(p)) + '</th>').join('') + '</tr></thead><tbody>' +
-    row('Lowest listed price', p => lowest(p) ? money(lowest(p).price) : '–') + keys.map(k => row(k, p => esc(p.data.specs?.[k] ?? '–'))).join('') +
+    (ps.some(photoOf) ? row('', p => photoOf(p) ? imageTag(p, 'cmpPhoto') : '') : '') + row('Lowest listed price', p => lowest(p) ? money(lowest(p).price) : '–') + keys.map(k => row(k, p => esc(p.data.specs?.[k] ?? '–'))).join('') +
     row('Notes', p => esc(p.data.feature)) +
     row('Retailers', p => (p.data.offers || []).map(o => safeUrl(o.link) ? '<a target="_blank" rel="noopener noreferrer" href="' + esc(o.link) + '">' + esc(o.shop) + ' · ' + money(o.price) + '</a>' : esc(o.shop) + ' · ' + money(o.price)).join('<br>') || '–') +
     '</tbody></table></div>' + (ps.every(p => /pram/i.test(p.data.category || '')) ? '<p class="callout">In-store check: have each of you fold and lift the pram into the RAV4. Check the boot space left for groceries.</p>' : ''));
