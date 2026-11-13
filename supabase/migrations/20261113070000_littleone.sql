@@ -24,6 +24,7 @@ create index if not exists ll_auth_failures_idx on public.ll_auth_failures (ip_h
 alter table public.ll_entries enable row level security;
 alter table public.ll_auth_failures enable row level security;
 revoke all on public.ll_entries, public.ll_auth_failures from anon, authenticated;
+grant all on public.ll_entries, public.ll_auth_failures to service_role;
 
 -- Private bucket for photos and files added on the Ideas page.
 insert into storage.buckets (id, name, public, file_size_limit)
