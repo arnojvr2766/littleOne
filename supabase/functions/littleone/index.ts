@@ -47,6 +47,88 @@ async function validToken(token: string | null) {
   return same(sig, await hmac("token:" + exp));
 }
 
+// ---- Daily price check ----
+// Called by a scheduled database job, without the passcode. That is safe because it
+// reads nothing back out: it only re-reads prices from the shops below, at most once
+// every 30 minutes, and replies with counts.
+// Only these shops are fetched, so a pasted link can never point the server elsewhere.
+const WATCH_HOSTS = new Set(["www.preciouscargo.co.za", "preciouscargo.co.za", "www.noola.co.za", "noola.co.za", "www.chelino.co.za", "chelino.co.za", "mopani.co.za", "www.ormsdirect.co.za"]);
+const UA = "Mozilla/5.0 (compatible; TheLittleList-PriceCheck/1.0; personal baby planner)";
+const num = (v: unknown) => { const n = Number(String(v ?? "").replace(/[^0-9.]/g, "")); return n > 0 ? n : 0; };
+function metaContent(html: string, prop: string) {
+  const i = html.indexOf(prop);
+  if (i < 0) return "";
+  const tag = html.slice(Math.max(0, html.lastIndexOf("<", i)), html.indexOf(">", i) + 1);
+  return (tag.match(/content=["']([^"']+)/) || [])[1] ?? "";
+}
+function readPage(html: string) {
+  let price = num(metaContent(html, "og:price:amount")) || num(metaContent(html, "product:price:amount"));
+  const avail: string[] = [];
+  let at = 0;
+  while ((at = html.indexOf("application/ld+json", at)) >= 0) {
+    const start = html.indexOf(">", at) + 1, end = html.indexOf("</script>", start);
+    at = end < 0 ? html.length : end;
+    const raw = end < 0 ? "" : html.slice(start, end);
+    if (!raw.includes("Product")) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      for (const node of [].concat(parsed["@graph"] ?? parsed) as any[]) {
+        if (!String(node?.["@type"]).includes("Product")) continue;
+        for (const o of [].concat(node.offers ?? []).flatMap((x: any) => x.offers ?? [x]) as any[]) {
+          if (!price) price = num(o.price);
+          if (o.availability) avail.push(String(o.availability));
+        }
+      }
+    } catch { /* ignore malformed blocks */ }
+  }
+  const stock = avail.some((a) => a.includes("InStock")) ? "in" : avail.length ? "out" : "";
+  return { price, stock };
+}
+async function pricewatch(req: Request) {
+  const { limit = 12 } = await req.json().catch(() => ({}));
+  const { data: last } = await db.from("ll_entries").select("updated_at").eq("id", "pricewatch").maybeSingle();
+  if (last && Date.now() - new Date(last.updated_at).getTime() < 30 * 60_000) return json({ error: "Checked recently. Try again later." }, 429);
+  const stamp = { id: "pricewatch", kind: "system", data: {}, updated_at: new Date().toISOString(), updated_by: "pricewatch" };
+  const { error: sErr } = await db.from("ll_entries").upsert(stamp);
+  if (sErr) throw sErr;
+  const { data, error } = await db.from("ll_entries").select("id, data").eq("kind", "product").is("deleted_at", null);
+  if (error) throw error;
+  const today = new Date().toISOString().slice(0, 10);
+  const watchable = (o: any) => { try { const u = new URL(o.link); return u.protocol === "https:" && WATCH_HOSTS.has(u.hostname); } catch { return false; } };
+  const due = data.filter((e) => (e.data.offers ?? []).some(watchable))
+    .sort((a, b) => String(a.data.watchedAt ?? "").localeCompare(String(b.data.watchedAt ?? ""))).slice(0, Math.min(Number(limit) || 12, 40));
+  const report: any[] = [];
+  for (const e of due) {
+    const d = e.data, seen: string[] = [];
+    let anyIn = false, checked = 0;
+    for (const o of d.offers) {
+      if (!watchable(o)) continue;
+      try {
+        const res = await fetch(o.link, { headers: { "User-Agent": UA, "Accept-Language": "en-ZA,en" }, signal: AbortSignal.timeout(20000) });
+        if (!res.ok) { report.push({ id: e.id, shop: o.shop, error: res.status }); continue; }
+        const { price, stock } = readPage(await res.text());
+        if (!price) { report.push({ id: e.id, shop: o.shop, error: "no price found" }); continue; }
+        checked++;
+        if (price < o.price) { o.dropFrom = Math.max(o.dropFrom ?? 0, o.price); o.dropAt = today; }
+        else if (price > o.price) { delete o.dropFrom; delete o.dropAt; }
+        if (price !== o.price) report.push({ id: e.id, shop: o.shop, was: o.price, now: price });
+        o.price = price;
+        if (o.old && o.old <= price) delete o.old;
+        if (stock) { o.stock = stock; anyIn ||= stock === "in"; seen.push((stock === "in" ? "In stock at " : "Out of stock at ") + o.shop); }
+      } catch (err) { report.push({ id: e.id, shop: o.shop, error: String(err).slice(0, 80) }); }
+    }
+    d.watchedAt = new Date().toISOString();
+    if (checked) {
+      d.checked = today;
+      if (seen.length) { d.stock = anyIn ? "in" : "out"; d.specs = { ...(d.specs ?? {}), Availability: seen.join(". ") + ". Checked automatically." }; }
+    }
+    const { error: uErr } = await db.from("ll_entries").update({ data: d, updated_by: "pricewatch" }).eq("id", e.id);
+    if (uErr) throw uErr;
+  }
+  console.log("pricewatch", JSON.stringify(report));
+  return json({ checked: due.length, changed: report.filter((r) => r.now).length, failed: report.filter((r) => r.error).length });
+}
+
 async function unlock(req: Request) {
   if (!PASSCODE) return json({ error: "The family passcode has not been set up yet." }, 503);
   const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
@@ -129,6 +211,7 @@ Deno.serve(async (req) => {
   const action = new URL(req.url).searchParams.get("action");
   try {
     if (action === "unlock") return await unlock(req);
+    if (action === "pricewatch") return await pricewatch(req);
     if (!(await validToken(req.headers.get("x-ll-token")))) return json({ error: "Locked" }, 401);
     const name = decodeURIComponent(req.headers.get("x-ll-name") ?? "").slice(0, 40) || "Someone";
     if (action === "list") return await list();

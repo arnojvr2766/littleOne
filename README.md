@@ -38,3 +38,7 @@ npm run dev
 ```
 
 Opens on http://localhost:5173 with an in-memory copy of the API. The passcode is `baby` and data resets on restart.
+
+## Daily price check
+
+`?action=pricewatch` on the function re-reads the price and stock of saved options from a fixed list of shops (Precious Cargo, Noola, Chelino, Mopani, Orms). It needs no passcode because it returns only counts, and it refuses to run more than once every 30 minutes. `supabase/migrations/20261113090000_pricewatch.sql` schedules it three times each morning. When a price falls, the offer keeps `dropFrom` and `dropAt`, and the app shows a "Price dropped" badge.
