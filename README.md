@@ -28,7 +28,6 @@ The tables have row level security on with no policies, so the public Supabase k
 4. **Hosting:** import this repo in Vercel (framework preset: *Other*, no build command).
 5. **Sub-path on the main site:** in the main site's `vercel.json`, before its catch-all rewrite:
    ```json
-   "redirects": [{ "source": "/littleOne", "destination": "/littleOne/", "permanent": false }],
    "rewrites": [{ "source": "/littleOne/:path*", "destination": "https://<littleone-project>.vercel.app/:path*" }]
    ```
 
