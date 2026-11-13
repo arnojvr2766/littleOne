@@ -2,7 +2,7 @@
 
 Our shared baby planner: compare the big purchases, tick off the checklist, track shop prices and drop in ideas (notes, links, photos).
 
-- **Frontend:** plain HTML, CSS and JavaScript. No build step. All paths are relative, so it works under any sub-path (for example `/littleone/`).
+- **Frontend:** plain HTML, CSS and JavaScript. No build step. All paths are relative, so it works under any sub-path (for example `/littleOne/`).
 - **Backend:** one Supabase Edge Function (`supabase/functions/littleone`) in front of Postgres and a private storage bucket.
 - **Access:** a shared family passcode. The function swaps it for a signed token that the browser keeps for 90 days. Eight wrong tries from one address in 15 minutes locks that address out.
 
@@ -28,8 +28,8 @@ The tables have row level security on with no policies, so the public Supabase k
 4. **Hosting:** import this repo in Vercel (framework preset: *Other*, no build command).
 5. **Sub-path on the main site:** in the main site's `vercel.json`, before its catch-all rewrite:
    ```json
-   "redirects": [{ "source": "/littleone", "destination": "/littleone/", "permanent": false }],
-   "rewrites": [{ "source": "/littleone/:path*", "destination": "https://<littleone-project>.vercel.app/:path*" }]
+   "redirects": [{ "source": "/littleOne", "destination": "/littleOne/", "permanent": false }],
+   "rewrites": [{ "source": "/littleOne/:path*", "destination": "https://<littleone-project>.vercel.app/:path*" }]
    ```
 
 ## Local preview
