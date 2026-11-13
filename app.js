@@ -10,7 +10,8 @@ const store = {
   get(k) { try { return localStorage.getItem(k) } catch { return null } },
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch {} }
 };
-let token = store.get('ll-token'), me = store.get('ll-name') || '';
+let token = store.get('ll-token');
+const me = '';
 let entries = [], urls = {};
 try { const c = JSON.parse(store.get('ll-cache')); if (c) { entries = c.entries || []; urls = c.urls || {} } } catch {}
 const selected = new Set();
@@ -36,7 +37,7 @@ async function call(action, body, raw) {
   try {
     res = await fetch(API + '?action=' + action, {
       method: 'POST',
-      headers: { 'Content-Type': raw ? raw.type : 'application/json', ...(token ? { 'x-ll-token': token } : {}), 'x-ll-name': encodeURIComponent(me) },
+      headers: { 'Content-Type': raw ? raw.type : 'application/json', ...(token ? { 'x-ll-token': token } : {}) },
       body: raw || JSON.stringify(body || {})
     });
   } catch { offline = true; status(); throw Error('Could not reach the planner. Check your connection.') }
@@ -149,7 +150,7 @@ function detail(id) {
   openDialog(title(p), '<p>' + esc(d.feature) + '</p>' + (specs.length ? '<dl>' + specs.map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '') +
     link(d.source, 'Product page') + '<h3 style="margin-top:23px">Shop prices</h3>' +
     ((d.offers || []).length ? d.offers.map(o => offerRow(p, o, false)).join('') : '<p class="small">No shop prices saved yet.</p>') +
-    '<p class="hint">' + (d.checked ? 'Prices checked ' + longDate(d.checked) + '. ' : '') + 'Confirm the local model and required accessories with the shop.' + (p.created_by && p.created_by !== 'starter' ? ' Added by ' + esc(p.created_by) + '.' : '') + '</p>' +
+    '<p class="hint">' + (d.checked ? 'Prices checked ' + longDate(d.checked) + '. ' : '') + 'Confirm the local model and required accessories with the shop.' + '</p>' +
     '<div class="formActions"><button class="ghost" data-edit="' + esc(p.id) + '">Edit</button><button class="ghost danger" data-remove="' + esc(p.id) + '">Remove</button></div>');
 }
 function comparison() {
@@ -200,7 +201,7 @@ async function saveProduct(form) {
 function checklist() {
   const items = ofKind('item');
   return '<section class="section"><div class="sectionHead"><div><h2>Our baby checklist</h2><p>Tick items you have bought, borrowed or received. Add anything your family still needs.</p></div><strong>' + items.filter(x => x.data.done).length + ' of ' + items.length + ' ready</strong></div>' +
-    groupNames.map((g, i) => '<div class="listgroup"><h3>' + g + '</h3>' + items.filter(x => x.data.group === i).map(x => '<div class="listRow ' + (x.data.done ? 'done' : '') + '"><input type="checkbox" id="c-' + esc(x.id) + '" data-done="' + esc(x.id) + '" ' + (x.data.done ? 'checked' : '') + '><span><label for="c-' + esc(x.id) + '"><strong>' + esc(x.data.name) + '</strong></label><small>' + esc(x.data.note) + (x.data.done && x.data.doneBy ? (x.data.note ? ' · ' : '') + 'Ticked by ' + esc(x.data.doneBy) : '') + '</small></span><button class="rowDel" data-remove="' + esc(x.id) + '" aria-label="Remove ' + esc(x.data.name) + '">×</button></div>').join('') + '</div>').join('') +
+    groupNames.map((g, i) => '<div class="listgroup"><h3>' + g + '</h3>' + items.filter(x => x.data.group === i).map(x => '<div class="listRow ' + (x.data.done ? 'done' : '') + '"><input type="checkbox" id="c-' + esc(x.id) + '" data-done="' + esc(x.id) + '" ' + (x.data.done ? 'checked' : '') + '><span><label for="c-' + esc(x.id) + '"><strong>' + esc(x.data.name) + '</strong></label><small>' + esc(x.data.note) + '</small></span><button class="rowDel" data-remove="' + esc(x.id) + '" aria-label="Remove ' + esc(x.data.name) + '">×</button></div>').join('') + '</div>').join('') +
     '<form class="newItem"><input name="item" aria-label="New item name" placeholder="Add an item to your list" maxlength="90" required><input name="note" aria-label="Note" placeholder="Note (optional)" maxlength="200"><select name="group" aria-label="When needed">' + groupNames.map((g, i) => '<option value="' + i + '">' + g + '</option>').join('') + '</select><button class="primary">Add item</button></form><p class="hint">Shared between both of you and saved automatically. &nbsp; <a href="https://www.nhs.uk/best-start-in-life/pregnancy/preparing-for-labour-and-birth/what-to-buy-for-your-newborn-baby/" target="_blank" rel="noopener">Newborn essentials guide ↗</a></p></section>';
 }
 
@@ -215,7 +216,7 @@ function ideas() {
       return '<article class="idea">' + (pics.length ? '<div class="ideaPics">' + pics.map(f => '<a href="' + esc(urls[f.path]) + '" target="_blank" rel="noopener"><img src="' + esc(urls[f.path]) + '" alt="' + esc(f.name) + '" loading="lazy"></a>').join('') + '</div>' : '') +
         (x.data.text ? '<p>' + linkify(x.data.text) + '</p>' : '') +
         docs.map(f => urls[f.path] ? link(urls[f.path], f.name) : '<span class="small">' + esc(f.name) + '</span>').join('') +
-        '<div class="ideaMeta"><span>' + esc(x.created_by || '') + ' · ' + when(x.created_at) + '</span><button class="textbtn" data-remove="' + esc(x.id) + '">Remove</button></div></article>';
+        '<div class="ideaMeta"><span>' + when(x.created_at) + '</span><button class="textbtn" data-remove="' + esc(x.id) + '">Remove</button></div></article>';
     }).join('') + '</div>' : '<p class="empty" style="margin-top:22px">No ideas yet. The first one is yours.</p>') + '</section>';
 }
 function addPending(files) {
@@ -242,11 +243,11 @@ async function saveIdea(form) {
 
 /* ---------- Gate ---------- */
 function gate() {
-  return '<section class="gate"><h2>Welcome</h2><p>This planner is just for the two of us. Enter the family passcode to open it on this device.</p><form id="gateForm"><label class="field">Your name<input name="name" required maxlength="30" autocomplete="given-name" value="' + esc(me) + '"></label><label class="field">Family passcode<input name="passcode" type="password" required autocomplete="current-password"></label><p class="error" role="alert"></p><button class="primary">Open our planner</button></form></section>';
+  return '<section class="gate"><h2>Welcome</h2><p>Enter the family passcode once and this device stays signed in.</p><form id="gateForm"><label class="field">Family passcode<input name="passcode" type="password" required autofocus autocomplete="current-password"></label><p class="error" role="alert"></p><button class="primary">Open our planner</button></form></section>';
 }
 async function unlock(form) {
   const btn = form.querySelector('.primary'), err = form.querySelector('.error');
-  me = form.name.value.trim(); store.set('ll-name', me); btn.disabled = true; err.textContent = '';
+  btn.disabled = true; err.textContent = '';
   try { token = (await call('unlock', { passcode: form.passcode.value })).token; store.set('ll-token', token); render(); sync(true) }
   catch (e) { err.textContent = e.message; btn.disabled = false }
 }
@@ -284,7 +285,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const d = e.target.dataset;
   if (d.compare) { if (e.target.checked) selected.add(d.compare); else selected.delete(d.compare); counter() }
-  else if (d.done) { const x = byId(d.done), done = e.target.checked; put({ ...x, data: { ...x.data, done, doneBy: done ? me : undefined } }); rerenderFocused(sel('data-done', d.done)) }
+  else if (d.done) { const x = byId(d.done), done = e.target.checked; put({ ...x, data: { ...x.data, done } }); rerenderFocused(sel('data-done', d.done)) }
   else if (e.target.id === 'pick') { addPending(e.target.files); e.target.value = '' }
 });
 document.addEventListener('submit', e => {

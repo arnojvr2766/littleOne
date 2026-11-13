@@ -4,7 +4,7 @@ Our shared baby planner: compare the big purchases, tick off the checklist, trac
 
 - **Frontend:** plain HTML, CSS and JavaScript. No build step. All paths are relative, so it works under any sub-path (for example `/littleOne/`).
 - **Backend:** one Supabase Edge Function (`supabase/functions/littleone`) in front of Postgres and a private storage bucket.
-- **Access:** a shared family passcode. The function swaps it for a signed token that the browser keeps for 90 days. Eight wrong tries from one address in 15 minutes locks that address out.
+- **Access:** a shared family passcode. The function swaps it for a signed token that the browser keeps for 400 days. Eight wrong tries from one address in 15 minutes locks that address out.
 
 ## How data is stored
 
@@ -12,7 +12,7 @@ Everything is an *entry* in `ll_entries`: `{ id, kind, data }`, where `data` is 
 
 | kind | what it is | main fields in `data` |
 | --- | --- | --- |
-| `item` | checklist row | `group`, `name`, `note`, `done`, `doneBy` |
+| `item` | checklist row | `group`, `name`, `note`, `done` |
 | `product` | something to compare | `category`, `name`, `brand`, `feature`, `specs`, `offers[]`, `photo`/`image`, `fav` |
 | `idea` | note, link or photos | `text`, `files[]` (`path`, `name`, `type`) |
 

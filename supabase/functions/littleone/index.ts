@@ -7,7 +7,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PASSCODE = (Deno.env.get("LITTLEONE_PASSCODE") ?? "").trim();
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_KEY, { auth: { persistSession: false } });
 const BUCKET = "littleone";
-const TOKEN_DAYS = 90;
+const TOKEN_DAYS = 400;
 const MAX_UPLOAD = 10 * 1024 * 1024;
 const FILE_TYPES: Record<string, string> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
