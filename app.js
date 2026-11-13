@@ -103,6 +103,12 @@ const products = () => ofKind('product');
 const photoOf = p => p.data.photo ? urls[p.data.photo] : p.data.image;
 const title = p => [p.data.brand, p.data.name].filter(Boolean).join(' ');
 const lowest = p => [...(p.data.offers || [])].sort((a, b) => a.price - b.price)[0];
+const deviceId = store.get('ll-device') || (() => { const v = newId(); store.set('ll-device', v); return v })();
+const drop = o => o && o.dropFrom > o.price ? o.dropFrom - o.price : 0;
+const priceOf = p => p.data.status === 'bought' && p.data.paid > 0 ? p.data.paid : (lowest(p)?.price || 0);
+const inCat = c => products().filter(p => p.data.category === c);
+const catStatus = c => { const ps = inCat(c); return ps.some(p => p.data.status === 'bought') ? 'Bought' : ps.some(p => p.data.status === 'chosen') ? 'Decided' : ps.some(p => p.data.fav) ? 'Shortlisted' : 'Researching' };
+const pill = st => '<span class="pill ' + st.toLowerCase() + '">' + st + '</span>';
 function imageTag(p, cls = '') {
   const src = photoOf(p);
   return src ? '<img class="' + cls + '" src="' + esc(src) + '" alt="' + esc(title(p)) + '" loading="lazy">' : '<span class="noPhoto ' + cls + '" aria-hidden="true">' + esc((p.data.name || '?')[0].toUpperCase()) + '</span>';
@@ -113,11 +119,12 @@ const rank = k => { const i = specOrder.indexOf(k); return i < 0 ? 99 : i };
 const specKeys = ps => [...new Set(ps.flatMap(p => Object.keys(p.data.specs || {})))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 const stockRank = d => ({ in: 0, unknown: 1, out: 2 }[d.stock] ?? 1);
 function card(p, i) {
-  const d = p.data, o = lowest(p), fav = !!d.fav, save = o && o.old > o.price;
-  return '<article class="card"><div class="photo' + (photoOf(p) ? '' : ' bare') + '" style="--tone:' + tones[i % 3] + '">' + imageTag(p) + (save ? '<span class="sale">Save ' + money(o.old - o.price) + '</span>' : '') +
+  const d = p.data, o = lowest(p), fav = !!d.fav, save = o && o.old > o.price, likes = (d.likes || []).length, notes = (d.notes || []).length;
+  return '<article class="card' + (d.status ? ' picked' : '') + '"><div class="photo' + (photoOf(p) ? '' : ' bare') + '" style="--tone:' + tones[i % 3] + '">' + imageTag(p) + (drop(o) ? '<span class="sale">Price dropped ' + money(drop(o)) + '</span>' : save ? '<span class="sale">Save ' + money(o.old - o.price) + '</span>' : '') +
+    (d.status ? '<span class="pick">' + (d.status === 'bought' ? '✓ Bought' : '★ We’re buying this') + '</span>' : '') +
     '<button class="fav ' + (fav ? 'on' : '') + '" aria-label="Shortlist ' + esc(d.name) + '" aria-pressed="' + fav + '" data-fav="' + esc(p.id) + '">' + (fav ? '♥' : '♡') + '</button></div><div class="cardBody">' +
     (category === 'all' && categories().length > 1 && d.category ? '<span class="catTag">' + esc(d.category) + '</span>' : '') +
-    '<span class="brand">' + esc(d.brand) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.feature) + '</p><div class="priceline">' +
+    '<span class="brand">' + esc(d.brand) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.feature) + '</p>' + (likes || notes ? '<div class="cardMeta">' + (likes ? '👍 ' + likes : '') + (likes && notes ? ' · ' : '') + (notes ? notes + ' note' + (notes === 1 ? '' : 's') : '') + '</div>' : '') + '<div class="priceline">' +
     (o ? '<span class="price">' + money(o.price) + '</span>' + (save ? '<del>' + money(o.old) + '</del>' : '') : '<span class="small">No price yet</span>') + stockTag(d) +
     '</div><div class="cardActions"><label class="checkLabel"><input type="checkbox" data-compare="' + esc(p.id) + '" ' + (selected.has(p.id) ? 'checked' : '') + '>Compare</label><button class="textbtn" data-details="' + esc(p.id) + '">Specs &amp; prices ↗</button></div></div></article>';
 }
@@ -127,8 +134,8 @@ function compare() {
   const all = products(), favs = all.filter(p => p.data.fav).length;
   const chosen = all.filter(p => (category === 'all' || p.data.category === category) && (!favouritesOnly || p.data.fav))
     .sort((a, b) => (a.data.category || '').localeCompare(b.data.category || '') || (b.data.specs?.Style === 'Jogging pram') - (a.data.specs?.Style === 'Jogging pram') || stockRank(a.data) - stockRank(b.data) || (lowest(a)?.price ?? 1e9) - (lowest(b)?.price ?? 1e9));
-  return '<section class="section"><div class="sectionHead"><div><h2>' + esc(category === 'all' ? (cats.length === 1 ? cats[0] : 'The big purchases') : category) + '</h2><p>Compare the options side by side, with the price at each shop.</p></div><div class="controls"><button data-filter="saved" aria-pressed="' + favouritesOnly + '" class="' + (favouritesOnly ? 'active' : '') + '">♡ Shortlist (' + favs + ')</button><button class="primary" id="addProduct">+ Add an option</button></div></div>' +
-    (cats.length > 1 ? '<div class="controls tabs" role="group" aria-label="Categories"><button data-cat="all" class="' + (category === 'all' ? 'active' : '') + '">Everything</button>' + cats.map(c => '<button data-cat="' + esc(c) + '" class="' + (category === c ? 'active' : '') + '">' + esc(c) + '</button>').join('') + '</div>' : '') +
+  return '<section class="section"><div class="sectionHead"><div><h2>' + esc(category === 'all' ? (cats.length === 1 ? cats[0] : 'The big purchases') : category) + '</h2>' + (category !== 'all' ? pill(catStatus(category)) : '') + '<p>Compare the options side by side, with the price at each shop.</p></div><div class="controls"><button data-filter="saved" aria-pressed="' + favouritesOnly + '" class="' + (favouritesOnly ? 'active' : '') + '">♡ Shortlist (' + favs + ')</button><button class="primary" id="addProduct">+ Add an option</button></div></div>' +
+    (cats.length > 1 ? '<div class="controls tabs" role="group" aria-label="Categories"><button data-cat="all" class="' + (category === 'all' ? 'active' : '') + '">Everything</button>' + cats.map(c => '<button data-cat="' + esc(c) + '" class="' + (category === c ? 'active' : '') + '"><i class="dot ' + catStatus(c).toLowerCase() + '" title="' + catStatus(c) + '"></i>' + esc(c) + '</button>').join('') + '</div>' : '') +
     '<div class="grid">' +
     chosen.map((p, i) => card(p, i)).join('') + '</div>' +
     (!chosen.length ? '<p class="empty">' + (favouritesOnly ? 'Tap the heart on an option to add it to your shortlist.' : 'Nothing here yet. Add the first option to compare.') + '</p>' : '') +
@@ -142,13 +149,13 @@ function counter() {
 }
 function offerRow(p, o, thumb = true) {
   const save = o.old > o.price;
-  return '<div class="offerRow">' + (thumb ? imageTag(p, 'thumb') : '') + '<div class="info"><strong>' + esc(thumb ? title(p) : o.shop) + '</strong><small>' + (thumb ? esc(o.shop) : 'Retailer listing') + (save ? ' · Save ' + money(o.old - o.price) : '') + '</small></div><div class="priceCell"><span class="price">' + money(o.price) + '</span>' + (save ? '<del>' + money(o.old) + '</del>' : '') + '</div>' + link(o.link, 'Visit shop') + '</div>';
+  return '<div class="offerRow">' + (thumb ? imageTag(p, 'thumb') : '') + '<div class="info"><strong>' + esc(thumb ? title(p) : o.shop) + '</strong><small>' + (thumb ? esc(o.shop) : 'Retailer listing') + (save ? ' · Save ' + money(o.old - o.price) : '') + (drop(o) ? ' · Dropped ' + money(drop(o)) + (o.dropAt ? ' on ' + longDate(o.dropAt) : '') : '') + '</small></div><div class="priceCell"><span class="price">' + money(o.price) + '</span>' + (save ? '<del>' + money(o.old) + '</del>' : '') + '</div>' + link(o.link, 'Visit shop') + '</div>';
 }
 function offers() {
-  const list = products().flatMap(p => (p.data.offers || []).map(o => [p, o])).filter(([, o]) => !specialsOnly || o.old > o.price).sort((a, b) => a[1].price - b[1].price);
-  return '<section class="section"><div class="sectionHead"><div><h2>Retailer offers</h2><p>Every shop price we have saved, cheapest first. Delivery and accessories may cost extra.</p></div><div class="controls"><button data-offers="all" class="' + (!specialsOnly ? 'active' : '') + '">All offers</button><button data-offers="sale" class="' + (specialsOnly ? 'active' : '') + '">Specials only</button></div></div>' +
+  const list = products().flatMap(p => (p.data.offers || []).map(o => [p, o])).filter(([, o]) => !specialsOnly || o.old > o.price || drop(o)).sort((a, b) => a[1].price - b[1].price);
+  return '<section class="section"><div class="sectionHead"><div><h2>Retailer offers</h2><p>Every shop price we have saved, cheapest first. Delivery and accessories may cost extra.</p></div><div class="controls"><button data-offers="all" class="' + (!specialsOnly ? 'active' : '') + '">All offers</button><button data-offers="sale" class="' + (specialsOnly ? 'active' : '') + '">Specials and price drops</button></div></div>' +
     (list.length ? list.map(([p, o]) => offerRow(p, o)).join('') : '<p class="empty">No offers to show yet.</p>') +
-    '<p class="hint">A special shows the shop’s advertised previous price. Open the listing to confirm today’s price, colour and stock.</p></section>';
+    '<p class="hint">Prices are re-checked automatically each morning where the shop allows it. A special shows the shop’s advertised previous price; a drop is a fall since our last check. Open the listing to confirm today’s price, colour and stock.</p></section>';
 }
 function detail(id) {
   const p = byId(id); if (!p) return; const d = p.data, specs = specKeys([p]).map(k => [k, d.specs[k]]);
@@ -156,7 +163,30 @@ function detail(id) {
     link(d.source, 'Product page') + '<h3 style="margin-top:23px">Shop prices</h3>' +
     ((d.offers || []).length ? d.offers.map(o => offerRow(p, o, false)).join('') : '<p class="small">No shop prices saved yet.</p>') +
     '<p class="hint">' + (d.checked ? 'Prices checked ' + longDate(d.checked) + '. ' : '') + 'Confirm the local model and required accessories with the shop.' + '</p>' +
+    decisionBlock(p) + notesBlock(p) +
     '<div class="formActions"><button class="ghost" data-edit="' + esc(p.id) + '">Edit</button><button class="ghost danger" data-remove="' + esc(p.id) + '">Remove</button></div>');
+}
+function decisionBlock(p) {
+  const d = p.data, id = esc(p.id);
+  return '<div class="decide"><h3>Our decision</h3>' +
+    (d.status === 'bought' ? '<p>✓ Bought' + (priceOf(p) ? ' for ' + money(priceOf(p)) : '') + '.</p><div class="formActions"><button class="ghost" data-status="" data-id="' + id + '">Undo</button></div>'
+      : (d.status === 'chosen' ? '<p>★ This is the one we’re buying.</p>' : '<p class="small">Still deciding. Pick this one when you are sure; it then counts in the budget.</p>') +
+        '<div class="formActions">' + (d.status === 'chosen' ? '' : '<button class="primary" data-status="chosen" data-id="' + id + '">We’re buying this</button>') + '<button class="ghost" data-showbuy>Mark as bought</button>' + (d.status === 'chosen' ? '<button class="ghost" data-status="" data-id="' + id + '">Undo</button>' : '') + '</div>' +
+        '<form id="boughtForm" class="inlineForm hidden" data-id="' + id + '"><label class="field">What we paid (R)<input name="paid" type="number" min="0" step="0.01" required value="' + esc(lowest(p)?.price ?? '') + '"></label><button class="primary">Save as bought</button></form>') + '</div>';
+}
+function notesBlock(p) {
+  const d = p.data, id = esc(p.id), likes = d.likes || [], mine = likes.includes(deviceId);
+  return '<div class="decide"><h3>What we think</h3><div class="formActions" style="margin-top:8px"><button class="ghost' + (mine ? ' on' : '') + '" aria-pressed="' + mine + '" data-like="' + id + '">👍 ' + (mine ? 'You like this' : 'I like this') + '</button><span class="small">' + (likes.length ? likes.length + ' of us like' + (likes.length === 1 ? 's' : '') + ' it' : 'No likes yet') + '</span></div>' +
+    (d.notes || []).map((n, i) => '<div class="note"><span><span class="noteText">' + esc(n.text) + '</span><small>' + when(n.at) + '</small></span><button class="rowDel" data-delnote="' + i + '" data-id="' + id + '" aria-label="Remove note">×</button></div>').join('') +
+    '<form id="noteForm" class="inlineForm" data-id="' + id + '"><input name="note" aria-label="Add a note" placeholder="Add a note, e.g. felt wobbly in the shop" maxlength="300" required><button class="primary">Add note</button></form></div>';
+}
+async function patch(id, change) { const p = byId(id); if (!p) return; stale = true; const done = put({ ...p, data: { ...p.data, ...change } }); if (dlg.open) detail(id); return done }
+function setStatus(id, status, paid) {
+  const p = byId(id); if (!p) return;
+  // Only one "the one we're buying" per category.
+  if (status === 'chosen') for (const o of inCat(p.data.category)) if (o.id !== id && o.data.status === 'chosen') put({ ...o, data: { ...o.data, status: undefined } });
+  patch(id, { status: status || undefined, paid: status === 'bought' ? paid : undefined });
+  announce(status === 'bought' ? 'Marked as bought' : status === 'chosen' ? 'Added to the budget' : 'Decision cleared');
 }
 function comparison() {
   const ps = products().filter(p => selected.has(p.id));
@@ -164,17 +194,17 @@ function comparison() {
   const row = (label, field) => '<tr><th scope="row">' + esc(label) + '</th>' + ps.map(p => '<td>' + field(p) + '</td>').join('') + '</tr>';
   openDialog('Side-by-side comparison', '<div class="tableWrap" tabindex="0" aria-label="Comparison, scroll sideways on a phone"><table class="comparison"><thead><tr><th scope="col">Option</th>' + ps.map(p => '<th scope="col">' + esc(title(p)) + '</th>').join('') + '</tr></thead><tbody>' +
     (ps.some(photoOf) ? row('', p => photoOf(p) ? imageTag(p, 'cmpPhoto') : '') : '') + row('Lowest listed price', p => lowest(p) ? money(lowest(p).price) : '–') + keys.map(k => row(k, p => esc(p.data.specs?.[k] ?? '–'))).join('') +
-    row('Notes', p => esc(p.data.feature)) +
+    row('Summary', p => esc(p.data.feature)) + (ps.some(p => (p.data.notes || []).length || (p.data.likes || []).length) ? row('What we think', p => ((p.data.likes || []).length ? '👍 ' + p.data.likes.length + '<br>' : '') + (p.data.notes || []).map(n => esc(n.text)).join('<br>')) : '') +
     row('Retailers', p => (p.data.offers || []).map(o => safeUrl(o.link) ? '<a target="_blank" rel="noopener noreferrer" href="' + esc(o.link) + '">' + esc(o.shop) + ' · ' + money(o.price) + '</a>' : esc(o.shop) + ' · ' + money(o.price)).join('<br>') || '–') +
     '</tbody></table></div>' + (ps.every(p => /pram/i.test(p.data.category || '')) ? '<p class="callout">In-store check: have each of you fold and lift the pram into the RAV4. Check the boot space left for groceries.</p>' : ''));
 }
 function offerInputs(o = {}) {
   return '<div class="offerInputs"><input name="shop" placeholder="Shop" aria-label="Shop" value="' + esc(o.shop) + '"><input name="price" type="number" min="0" step="0.01" placeholder="Price (R)" aria-label="Price in rand" value="' + esc(o.price) + '"><input name="old" type="number" min="0" step="0.01" placeholder="Was (R)" aria-label="Previous price in rand" value="' + esc(o.old) + '"><input name="link" type="url" placeholder="Link to listing" aria-label="Link to listing" value="' + esc(o.link) + '"></div>';
 }
-function productForm(id) {
-  const p = id ? byId(id) : null, d = p?.data || {};
+function productForm(id, pre) {
+  const p = id ? byId(id) : null, d = p?.data || pre || {};
   const specs = Object.entries(d.specs || {}).map(([k, v]) => k + ': ' + v).join('\n');
-  openDialog(p ? 'Edit ' + title(p) : 'Add an option to compare', '<form id="productForm" data-id="' + esc(id || '') + '"><div class="formGrid">' +
+  openDialog(p ? 'Edit ' + title(p) : 'Add an option to compare', '<form id="productForm" data-id="' + esc(id || '') + '" data-photo="' + esc(pre?.photo || '') + '" data-idea="' + esc(pre?.idea || '') + '"><div class="formGrid">' +
     '<label class="field">Name<input name="name" required maxlength="80" value="' + esc(d.name) + '"></label>' +
     '<label class="field">Brand<input name="brand" maxlength="60" value="' + esc(d.brand) + '"></label>' +
     '<label class="field wide">Category<input name="category" list="catList" maxlength="40" placeholder="e.g. Car seats, Cots, Monitors" value="' + esc(d.category ?? (category === 'all' ? '' : category)) + '"><datalist id="catList">' + categories().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></label>' +
@@ -182,7 +212,7 @@ function productForm(id) {
     '<label class="field wide">Specs <small>One per line, like “Weight: 11 kg”. Matching labels line up in the comparison.</small><textarea name="specs" rows="4">' + esc(specs) + '</textarea></label>' +
     '<div class="field wide">Shop prices<div id="offerRows">' + [...(d.offers || []), {}].map(offerInputs).join('') + '</div><div><button type="button" class="textbtn" id="moreOffers">+ Another shop</button></div></div>' +
     '<label class="field">Product page link<input name="source" type="url" value="' + esc(d.source) + '"></label>' +
-    '<label class="field">Photo <small>' + (photoOf(p || { data: {} }) ? 'Choose a file to replace the current photo.' : 'Optional.') + '</small><input name="photo" type="file" accept="image/*"></label>' +
+    '<label class="field">Photo <small>' + (photoOf(p || { data: {} }) || pre?.photo ? 'Choose a file to replace the current photo.' : 'Optional.') + '</small><input name="photo" type="file" accept="image/*"></label>' +
     '</div><p class="error" role="alert"></p><div class="formActions"><button class="primary">' + (p ? 'Save changes' : 'Add option') + '</button><button type="button" class="ghost" data-cancel>Cancel</button></div></form>');
 }
 async function saveProduct(form) {
@@ -193,12 +223,12 @@ async function saveProduct(form) {
     const v = n => r.querySelector('[name=' + n + ']').value.trim();
     return { shop: v('shop'), price: Number(v('price')), ...(Number(v('old')) ? { old: Number(v('old')) } : {}), ...(v('link') ? { link: v('link') } : {}) };
   }).filter(o => o.shop && o.price > 0);
-  const data = { ...(old?.data || { fav: false }), name: f.get('name').trim(), brand: f.get('brand').trim(), category: f.get('category').trim() || 'Other', feature: f.get('feature').trim(), specs, offers: offerList, source: f.get('source').trim(), checked: new Date().toISOString().slice(0, 10) };
+  const data = { ...(old?.data || { fav: false, ...(form.dataset.photo ? { photo: form.dataset.photo } : {}) }), name: f.get('name').trim(), brand: f.get('brand').trim(), category: f.get('category').trim() || 'Other', feature: f.get('feature').trim(), specs, offers: offerList, source: f.get('source').trim(), checked: new Date().toISOString().slice(0, 10) };
   btn.disabled = true; err.textContent = '';
   try {
     const file = f.get('photo');
     if (file && file.size) { data.photo = (await uploadFile(file)).path; delete data.image }
-    dlg.close(); await put({ id: old?.id || newId(), kind: 'product', data }); render(); announce(old ? 'Saved' : 'Added to compare');
+    dlg.close(); await put({ id: old?.id || newId(), kind: 'product', data }); if (form.dataset.idea && byId(form.dataset.idea)) { const x = byId(form.dataset.idea); await put({ ...x, data: { ...x.data, filed: 'Compare' } }) } render(); announce(old ? 'Saved' : 'Added to compare');
   } catch (e) { err.textContent = e.message; btn.disabled = false }
 }
 
@@ -221,8 +251,23 @@ function ideas() {
       return '<article class="idea">' + (pics.length ? '<div class="ideaPics">' + pics.map(f => '<a href="' + esc(urls[f.path]) + '" target="_blank" rel="noopener"><img src="' + esc(urls[f.path]) + '" alt="' + esc(f.name) + '" loading="lazy"></a>').join('') + '</div>' : '') +
         (x.data.text ? '<p>' + linkify(x.data.text) + '</p>' : '') +
         docs.map(f => urls[f.path] ? link(urls[f.path], f.name) : '<span class="small">' + esc(f.name) + '</span>').join('') +
+        (x.data.filed ? '<span class="pill decided">Filed to ' + esc(x.data.filed) + '</span>' : '<div class="ideaFile"><button class="ghost" data-tolist="' + esc(x.id) + '">→ Checklist item</button><button class="ghost" data-tooption="' + esc(x.id) + '">→ Option to compare</button></div>') +
         '<div class="ideaMeta"><span>' + when(x.created_at) + '</span><button class="textbtn" data-remove="' + esc(x.id) + '">Remove</button></div></article>';
     }).join('') + '</div>' : '<p class="empty" style="margin-top:22px">No ideas yet. The first one is yours.</p>') + '</section>';
+}
+function ideaParts(x) {
+  const text = (x.data.text || '').trim(), url = (text.match(/https?:\/\/\S+/) || [])[0] || '';
+  const lines = text.replace(url, '').split('\n').map(l => l.trim()).filter(Boolean);
+  return { first: lines[0] || '', rest: lines.slice(1).join(' '), text, url, photo: ((x.data.files || []).find(f => f.type.startsWith('image/')) || {}).path || '' };
+}
+function ideaToList(id) {
+  const x = byId(id); if (!x) return; const i = ideaParts(x);
+  put({ id: newId(), kind: 'item', data: { group: 1, name: (i.first || 'From an idea').slice(0, 90), note: [i.rest, i.url].filter(Boolean).join(' ').slice(0, 200), done: false } });
+  put({ ...x, data: { ...x.data, filed: 'Checklist' } }); render(); announce('Added to the checklist under Research now');
+}
+function ideaToOption(id) {
+  const x = byId(id); if (!x) return; const i = ideaParts(x);
+  productForm(null, { name: i.first.slice(0, 80), feature: i.rest.slice(0, 600), source: i.url, photo: i.photo, idea: id });
 }
 function addPending(files) {
   for (const file of files) {
@@ -246,6 +291,24 @@ async function saveIdea(form) {
   } catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Save idea' }
 }
 
+/* ---------- Budget ---------- */
+function budget() {
+  const cats = categories(), all = products(), limit = Number(byId('settings')?.data.budget) || 0;
+  const sum = st => all.filter(p => p.data.status === st).reduce((t, p) => t + priceOf(p), 0);
+  const spent = sum('bought'), toPay = sum('chosen'), planned = spent + toPay;
+  const tile = (label, value, cls = '') => '<div class="tile ' + cls + '"><small>' + label + '</small><strong>' + value + '</strong></div>';
+  return '<section class="section"><div class="sectionHead"><div><h2>Budget</h2><p>What we have decided on, what we have paid, and which decisions are still open.</p></div></div>' +
+    '<div class="tiles">' + tile('Planned', money(planned)) + tile('Spent', money(spent)) + tile('Still to pay', money(toPay)) + (limit ? tile(limit - planned >= 0 ? 'Budget left' : 'Over budget', money(Math.abs(limit - planned)), limit - planned >= 0 ? '' : 'over') : '') + '</div>' +
+    cats.map(c => {
+      const ps = inCat(c), picked = ps.filter(p => p.data.status), prices = ps.map(p => lowest(p)?.price).filter(Boolean);
+      return '<div class="budgetRow"><div class="budgetHead"><button class="textbtn" data-gocat="' + esc(c) + '">' + esc(c) + '</button>' + pill(catStatus(c)) + '</div>' +
+        (picked.length ? picked.map(p => '<div class="budgetItem"><button class="textbtn" data-details="' + esc(p.id) + '">' + esc(title(p)) + '</button><span>' + (p.data.status === 'bought' ? 'Paid ' : 'Planned ') + '<b>' + money(priceOf(p)) + '</b></span></div>').join('')
+          : '<small>' + ps.length + ' option' + (ps.length === 1 ? '' : 's') + (prices.length ? ', from ' + money(Math.min(...prices)) + ' to ' + money(Math.max(...prices)) : '') + '. Nothing picked yet.</small>') + '</div>';
+    }).join('') +
+    '<form id="budgetForm" class="inlineForm" style="margin-top:24px"><label class="field">Our total budget (R)<input name="budget" type="number" min="0" step="1" placeholder="Optional" value="' + esc(limit || '') + '"></label><button class="primary">Save budget</button></form>' +
+    '<p class="hint">Open an option and choose “We’re buying this” or “Mark as bought” to add it here. Planned uses the lowest saved shop price.</p></section>';
+}
+
 /* ---------- Gate ---------- */
 function gate() {
   return '<section class="gate"><h2>Welcome</h2><p>Enter the family passcode once and this device stays signed in.</p><form id="gateForm"><label class="field">Family passcode<input name="passcode" type="password" required autofocus autocomplete="current-password"></label><p class="error" role="alert"></p><button class="primary">Open our planner</button></form></section>';
@@ -258,12 +321,12 @@ async function unlock(form) {
 }
 
 /* ---------- Shell ---------- */
-function route() { const h = location.hash.slice(1); return ['offers', 'checklist', 'ideas'].includes(h) ? h : 'compare' }
+function route() { const h = location.hash.slice(1); return ['offers', 'checklist', 'ideas', 'budget'].includes(h) ? h : 'compare' }
 function render() {
   stale = false; const key = route();
   $('#nav').classList.toggle('hidden', !token); status();
   if (!token) { $('.banner').classList.add('hidden'); view.innerHTML = gate(); return }
-  view.innerHTML = key === 'offers' ? offers() : key === 'checklist' ? checklist() : key === 'ideas' ? ideas() : compare();
+  view.innerHTML = key === 'offers' ? offers() : key === 'checklist' ? checklist() : key === 'ideas' ? ideas() : key === 'budget' ? budget() : compare();
   document.querySelectorAll('nav a').forEach(a => { if (a.hash === '#' + key) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current') });
   $('.banner').classList.toggle('hidden', key !== 'compare'); counter(); document.querySelector('.tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' }); if (key === 'ideas') drawPending();
 }
@@ -278,6 +341,13 @@ document.addEventListener('click', e => {
   else if (d.cat) { category = d.cat; store.set('ll-cat', category); rerenderFocused(sel('data-cat', d.cat)); document.querySelector('.tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' }) }
   else if (d.offers) { specialsOnly = d.offers === 'sale'; rerenderFocused(sel('data-offers', d.offers)) }
   else if (d.details) detail(d.details);
+  else if ('status' in d) setStatus(d.id, d.status);
+  else if ('showbuy' in d) { $('#boughtForm').classList.remove('hidden'); $('#boughtForm input').focus() }
+  else if (d.like) { const p = byId(d.like), l = p.data.likes || []; patch(d.like, { likes: l.includes(deviceId) ? l.filter(v => v !== deviceId) : [...l, deviceId] }) }
+  else if (d.delnote) { const p = byId(d.id); patch(d.id, { notes: (p.data.notes || []).filter((_, i) => i !== Number(d.delnote)) }) }
+  else if (d.tolist) ideaToList(d.tolist);
+  else if (d.tooption) ideaToOption(d.tooption);
+  else if (d.gocat) { category = d.gocat; store.set('ll-cat', category); location.hash = '#compare' }
   else if (d.edit) productForm(d.edit);
   else if (d.remove) { const x = byId(d.remove); if (x && confirm('Remove “' + (x.data.name || 'this idea') + '” for both of you?')) { if (dlg.open) dlg.close(); removeEntry(d.remove); render() } }
   else if (d.unpend) { const [p] = pending.splice(Number(d.unpend), 1); p.url && URL.revokeObjectURL(p.url); drawPending() }
@@ -298,6 +368,9 @@ document.addEventListener('submit', e => {
   if (form.id === 'gateForm') unlock(form);
   else if (form.id === 'productForm') saveProduct(form);
   else if (form.id === 'composer') saveIdea(form);
+  else if (form.id === 'boughtForm') setStatus(form.dataset.id, 'bought', Number(form.paid.value) || undefined);
+  else if (form.id === 'noteForm') { const t = form.note.value.trim(), p = byId(form.dataset.id); if (t && p) patch(p.id, { notes: [...(p.data.notes || []), { text: t, at: new Date().toISOString() }] }) }
+  else if (form.id === 'budgetForm') { put({ id: 'settings', kind: 'settings', data: { ...(byId('settings')?.data || {}), budget: Number(form.budget.value) || 0 } }); render(); announce('Budget saved') }
   else if (form.matches('.newItem')) {
     const f = new FormData(form), name = f.get('item').trim(); if (!name) return;
     put({ id: newId(), kind: 'item', data: { group: Number(f.get('group')), name, note: f.get('note').trim(), done: false } }); render(); announce('Added to your checklist');
