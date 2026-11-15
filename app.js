@@ -123,7 +123,7 @@ const inCat = c => products().filter(p => p.data.category === c);
 const catStatus = c => { const ps = inCat(c); return ps.some(p => p.data.status === 'bought') ? 'Bought' : ps.some(p => p.data.status === 'chosen') ? 'Decided' : ps.some(p => p.data.fav) ? 'Shortlisted' : 'Researching' };
 const pill = st => '<span class="pill ' + st.toLowerCase() + '">' + st + '</span>';
 const stockTag = d => d.stock === 'in' ? '<span class="stock in">In stock</span>' : d.stock === 'out' ? '<span class="stock out">Out of stock</span>' : d.stock === 'unknown' ? '<span class="stock">Stock unconfirmed</span>' : '';
-const specOrder = ['Style', 'Good for running', 'Availability', 'Pram weight', 'Folded size', 'Fold', 'Newborn walks', 'Suitable for', 'Includes', 'Type', 'Standard'];
+const specOrder = ['Style', 'Good for running', 'Heart rate', 'Oxygen level', 'Breathing movement', 'Sleep tracking', 'Camera', 'Worn on baby', 'Medical status', 'Availability', 'Pram weight', 'Folded size', 'Fold', 'Newborn walks', 'Suitable for', 'Includes', 'Type', 'Standard'];
 const rank = k => { const i = specOrder.indexOf(k); return i < 0 ? 99 : i };
 const specKeys = ps => [...new Set(ps.flatMap(p => Object.keys(p.data.specs || {})))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 const stockRank = d => ({ in: 0, unknown: 1, out: 2 }[d.stock] ?? 1);
