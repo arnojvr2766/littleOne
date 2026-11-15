@@ -1,4 +1,4 @@
-# The Little List
+# LittleOne
 
 Our shared baby planner: compare the big purchases, tick off the checklist, track shop prices and drop in ideas (notes, links, photos).
 
@@ -42,3 +42,14 @@ Opens on http://localhost:5173 with an in-memory copy of the API. The passcode i
 ## Daily price check
 
 `?action=pricewatch` on the function re-reads the price and stock of saved options from a fixed list of shops (Precious Cargo, Noola, Chelino, Mopani, Orms). It needs no passcode because it returns only counts, and it refuses to run more than once every 30 minutes. `supabase/migrations/20261113090000_pricewatch.sql` schedules it three times each morning. When a price falls, the offer keeps `dropFrom` and `dropAt`, and the app shows a "Price dropped" badge.
+
+## Releasing a new version
+
+Run this before every push, then commit the result:
+
+```
+node scripts/release.mjs          # 2.0.0 -> 2.0.1
+node scripts/release.mjs minor    # 2.0.1 -> 2.1.0
+```
+
+It writes the version into `version.js` (shown in the app under the ⋯ menu and on the sign-in screen) and into `sw.js`. Changing `sw.js` is what makes installed phones notice the new release: the service worker downloads the new files, and the app updates itself if it was just opened, or shows an “Update” bar if you are in the middle of something.

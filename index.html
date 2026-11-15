@@ -1,8 +1,36 @@
 <!doctype html>
-<html lang="en-ZA"><head><meta charset="utf-8"><script>/* relative paths need a trailing slash when served under a sub-path */if(!location.pathname.endsWith('/')&&!/\.[a-z]+$/.test(location.pathname))location.replace(location.pathname+'/'+location.search+location.hash)</script><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Little List"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="apple-touch-icon" href="assets/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#f8f7f0"><meta name="robots" content="noindex, nofollow"><title>The Little List | Our baby planner</title><meta name="description" content="Our shared baby planner."><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"></head>
-<body><header><div class="bar"><a href="#compare" class="logo"><i aria-hidden="true">❧</i>The Little List</a><nav aria-label="Planner pages" id="nav"><a href="#compare">Compare</a><a href="#checklist">Checklist</a><a href="#offers">Offers</a><a href="#ideas">Ideas</a><a href="#budget">Budget</a></nav><span class="market">South Africa <b>·</b> ZAR</span></div></header>
-<main>
-<section class="banner hidden"><div class="intro"><div class="eyeline"><span></span> OUR BABY PLANNER</div><h1>Getting ready<br>for baby<span>.</span></h1><p>Plan the essentials, compare the big purchases and find specials from South African shops.</p><a href="#checklist" class="heroLink">Open our checklist <span aria-hidden="true">↗</span></a></div><div class="art" role="img" aria-label="Illustration of a parent taking a pram for a walk through a park"></div></section>
-<div id="view"></div></main><footer><span class="footbrand">The Little List</span><span class="sync" id="sync"></span><button id="lock" class="hidden">Lock this device</button></footer>
-<dialog id="dialog"><div class="dialogTop"><strong id="dialogLabel"></strong><button id="close" aria-label="Close dialog">×</button></div><div id="dialogBody" class="dialogBody"></div></dialog><div role="status" id="notice"></div>
-<script src="config.js"></script><script src="app.js"></script></body></html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8">
+<script>/* relative paths need a trailing slash when served under a sub-path */if(!location.pathname.endsWith('/')&&!/\.[a-z]+$/.test(location.pathname))location.replace(location.pathname+'/'+location.search+location.hash)</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f8f2">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LittleOne">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>LittleOne</title>
+<meta name="description" content="Our shared baby planner.">
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="appbar">
+  <a href="#home" class="brand" aria-label="LittleOne home"><img src="assets/logo-mark.png" alt="" width="34" height="34"><span>LittleOne</span></a>
+  <nav class="toptabs" aria-label="Sections" id="toptabs"></nav>
+  <button class="iconbtn" id="menu" aria-label="Settings and app info"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg><i class="syncdot" id="syncdot"></i></button>
+</header>
+<main id="view"></main>
+<button class="fab hidden" id="fab" aria-label="Add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<nav class="tabbar" aria-label="Sections" id="tabbar"></nav>
+<div class="updatebar hidden" id="updatebar" role="status"><span>A new version of LittleOne is ready.</span><button id="applyUpdate">Update</button></div>
+<dialog id="dialog"><div class="sheetHandle" aria-hidden="true"></div><div class="dialogTop"><strong id="dialogLabel"></strong><button id="close" aria-label="Close">×</button></div><div id="dialogBody" class="dialogBody"></div></dialog>
+<div role="status" id="notice"></div>
+<script src="version.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
