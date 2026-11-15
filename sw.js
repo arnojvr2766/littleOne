@@ -2,7 +2,7 @@
    Every release changes VERSION (scripts/release.mjs), which makes the browser
    install this worker again, re-download the app shell into a fresh cache and
    tell the open app that an update is ready. */
-const VERSION = '2.1.1+2026-11-15T16:17:42Z';
+const VERSION = '2.1.2+2026-11-15T17:27:44Z';
 const SHELL = 'shell-' + VERSION;
 const MEDIA = 'media-v1';
 const SHELL_FILES = [
