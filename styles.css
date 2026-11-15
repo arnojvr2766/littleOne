@@ -142,3 +142,10 @@ header{padding-top:env(safe-area-inset-top)}
 .ideaFile{display:flex;gap:6px;flex-wrap:wrap}
 .ideaFile .ghost{font-size:12px;padding:6px 10px}
 @media(max-width:620px){nav a{font-size:12px}.tiles{grid-template-columns:1fr 1fr}.tile strong{font-size:23px}.ideaFile .ghost{min-height:40px}}
+.quick{display:flex;gap:6px;margin-top:14px}
+.qbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 12px;border:1px solid #c9d3c4;border-radius:20px;background:#fbfbf6;font-size:14px;font-weight:600;color:var(--ink)}
+.qbtn span{font-size:13px}
+.qbtn.on{background:var(--sage);border-color:#57775d}
+.qbtn.wide{margin-left:auto}
+.qbtn.wide.on{background:var(--ink);border-color:var(--ink);color:white}
+@media(max-width:620px){.qbtn{min-height:44px;padding:0 14px}}

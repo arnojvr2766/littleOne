@@ -118,15 +118,30 @@ const specOrder = ['Style', 'Good for running', 'Availability', 'Pram weight', '
 const rank = k => { const i = specOrder.indexOf(k); return i < 0 ? 99 : i };
 const specKeys = ps => [...new Set(ps.flatMap(p => Object.keys(p.data.specs || {})))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 const stockRank = d => ({ in: 0, unknown: 1, out: 2 }[d.stock] ?? 1);
+function quickBar(p) {
+  const d = p.data, id = esc(p.id), likes = d.likes || [], mine = likes.includes(deviceId), notes = (d.notes || []).length, st = d.status;
+  return '<div class="quick">' +
+    '<button class="qbtn' + (mine ? ' on' : '') + '" aria-pressed="' + mine + '" data-like="' + id + '" aria-label="' + (mine ? 'Unlike' : 'Like') + ' ' + esc(d.name) + '">👍<span>' + (likes.length || 'Like') + '</span></button>' +
+    '<button class="qbtn" data-notes="' + id + '" aria-label="Notes on ' + esc(d.name) + '">💬<span>' + (notes || 'Note') + '</span></button>' +
+    (st === 'bought' ? '<button class="qbtn on wide" data-details="' + id + '">✓<span>Bought</span></button>'
+      : '<button class="qbtn wide' + (st === 'chosen' ? ' on' : '') + '" aria-pressed="' + (st === 'chosen') + '" data-quickpick="' + id + '">★<span>' + (st === 'chosen' ? 'Buying this' : 'Buy this one') + '</span></button>') +
+    '</div>';
+}
+function notesSheet(id) {
+  const p = byId(id); if (!p) return;
+  openDialog('Notes · ' + title(p), notesBlock(p).replace('<div class="decide"><h3>What we think</h3>', '<div class="decide" style="margin-top:0;padding-top:0;border:0">'));
+  dlg.dataset.sheet = 'notes:' + id;
+  setTimeout(() => $('#noteForm input')?.focus(), 50);
+}
 function card(p, i) {
   const d = p.data, o = lowest(p), fav = !!d.fav, save = o && o.old > o.price, likes = (d.likes || []).length, notes = (d.notes || []).length;
   return '<article class="card' + (d.status ? ' picked' : '') + '"><div class="photo' + (photoOf(p) ? '' : ' bare') + '" style="--tone:' + tones[i % 3] + '">' + imageTag(p) + (drop(o) ? '<span class="sale">Price dropped ' + money(drop(o)) + '</span>' : save ? '<span class="sale">Save ' + money(o.old - o.price) + '</span>' : '') +
     (d.status ? '<span class="pick">' + (d.status === 'bought' ? '✓ Bought' : '★ We’re buying this') + '</span>' : '') +
     '<button class="fav ' + (fav ? 'on' : '') + '" aria-label="Shortlist ' + esc(d.name) + '" aria-pressed="' + fav + '" data-fav="' + esc(p.id) + '">' + (fav ? '♥' : '♡') + '</button></div><div class="cardBody">' +
     (category === 'all' && categories().length > 1 && d.category ? '<span class="catTag">' + esc(d.category) + '</span>' : '') +
-    '<span class="brand">' + esc(d.brand) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.feature) + '</p>' + (likes || notes ? '<div class="cardMeta">' + (likes ? '👍 ' + likes : '') + (likes && notes ? ' · ' : '') + (notes ? notes + ' note' + (notes === 1 ? '' : 's') : '') + '</div>' : '') + '<div class="priceline">' +
+    '<span class="brand">' + esc(d.brand) + '</span><h3>' + esc(d.name) + '</h3><p>' + esc(d.feature) + '</p><div class="priceline">' +
     (o ? '<span class="price">' + money(o.price) + '</span>' + (save ? '<del>' + money(o.old) + '</del>' : '') : '<span class="small">No price yet</span>') + stockTag(d) +
-    '</div><div class="cardActions"><label class="checkLabel"><input type="checkbox" data-compare="' + esc(p.id) + '" ' + (selected.has(p.id) ? 'checked' : '') + '>Compare</label><button class="textbtn" data-details="' + esc(p.id) + '">Specs &amp; prices ↗</button></div></div></article>';
+    '</div>' + quickBar(p) + '<div class="cardActions"><label class="checkLabel"><input type="checkbox" data-compare="' + esc(p.id) + '" ' + (selected.has(p.id) ? 'checked' : '') + '>Compare</label><button class="textbtn" data-details="' + esc(p.id) + '">Specs &amp; prices ↗</button></div></div></article>';
 }
 function categories() { return [...new Set(products().map(p => p.data.category).filter(Boolean))].sort() }
 function compare() {
@@ -180,7 +195,7 @@ function notesBlock(p) {
     (d.notes || []).map((n, i) => '<div class="note"><span><span class="noteText">' + esc(n.text) + '</span><small>' + when(n.at) + '</small></span><button class="rowDel" data-delnote="' + i + '" data-id="' + id + '" aria-label="Remove note">×</button></div>').join('') +
     '<form id="noteForm" class="inlineForm" data-id="' + id + '"><input name="note" aria-label="Add a note" placeholder="Add a note, e.g. felt wobbly in the shop" maxlength="300" required><button class="primary">Add note</button></form></div>';
 }
-async function patch(id, change) { const p = byId(id); if (!p) return; stale = true; const done = put({ ...p, data: { ...p.data, ...change } }); if (dlg.open) detail(id); return done }
+async function patch(id, change) { const p = byId(id); if (!p) return; const done = put({ ...p, data: { ...p.data, ...change } }); if (dlg.open) { stale = true; dlg.dataset.sheet === 'notes:' + id ? notesSheet(id) : detail(id) } else rerenderFocused(sel('data-like', id)); return done }
 function setStatus(id, status, paid) {
   const p = byId(id); if (!p) return;
   // Only one "the one we're buying" per category.
@@ -330,7 +345,7 @@ function render() {
   document.querySelectorAll('nav a').forEach(a => { if (a.hash === '#' + key) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current') });
   $('.banner').classList.toggle('hidden', key !== 'compare'); counter(); document.querySelector('.tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' }); if (key === 'ideas') drawPending();
 }
-function openDialog(label, body) { $('#dialogLabel').textContent = label; $('#dialogBody').innerHTML = body; if (!dlg.open) dlg.showModal() }
+function openDialog(label, body) { dlg.dataset.sheet = ''; $('#dialogLabel').textContent = label; $('#dialogBody').innerHTML = body; if (!dlg.open) dlg.showModal() }
 function rerenderFocused(selector) { render(); document.querySelector(selector)?.focus({ preventScroll: true }) }
 const sel = (attr, v) => '[' + attr + '="' + CSS.escape(v) + '"]';
 
@@ -342,6 +357,8 @@ document.addEventListener('click', e => {
   else if (d.offers) { specialsOnly = d.offers === 'sale'; rerenderFocused(sel('data-offers', d.offers)) }
   else if (d.details) detail(d.details);
   else if ('status' in d) setStatus(d.id, d.status);
+  else if (d.notes) notesSheet(d.notes);
+  else if (d.quickpick) { const p = byId(d.quickpick); setStatus(p.id, p.data.status === 'chosen' ? '' : 'chosen'); rerenderFocused(sel('data-quickpick', p.id)) }
   else if ('showbuy' in d) { $('#boughtForm').classList.remove('hidden'); $('#boughtForm input').focus() }
   else if (d.like) { const p = byId(d.like), l = p.data.likes || []; patch(d.like, { likes: l.includes(deviceId) ? l.filter(v => v !== deviceId) : [...l, deviceId] }) }
   else if (d.delnote) { const p = byId(d.id); patch(d.id, { notes: (p.data.notes || []).filter((_, i) => i !== Number(d.delnote)) }) }
