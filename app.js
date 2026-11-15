@@ -14,7 +14,7 @@ let token = store.get('ll-token');
 let entries = [], urls = {};
 try { const c = JSON.parse(store.get('ll-cache')); if (c) { entries = c.entries || []; urls = c.urls || {} } } catch {}
 const selected = new Set();
-let favouritesOnly = false, specialsOnly = false, category = store.get('ll-cat') || 'all', pending = [], stale = false, lastSync = 0, offline = false;
+let favouritesOnly = false, specialsOnly = false, category = 'all', query = '', pending = [], stale = false, lastSync = 0, offline = false;
 
 const $ = s => document.querySelector(s);
 const view = $('#view'), dlg = $('#dialog');
@@ -188,19 +188,55 @@ function home() {
 function shopTabs(active) {
   return '<div class="segment" role="tablist"><a href="#shop"' + (active === 'shop' ? ' aria-current="page"' : '') + '>Options</a><a href="#offers"' + (active === 'offers' ? ' aria-current="page"' : '') + '>Offers' + (specials().length ? ' · ' + specials().length + ' specials' : '') + '</a></div>';
 }
+const SECTIONS = [
+  ['Getting around', ['Prams', 'Infant car seats', 'Baby carriers']],
+  ['Sleep', ['Cots', 'Cot mattresses', 'Bedside cribs', 'Travel and camp cots', 'Baby monitors']],
+  ['Feeding', ['Bottles', 'Breast pumps', 'Bottle washers and sterilisers']],
+  ['Nursery and changing', ['Compactums and dressers', 'Changing mats', 'Nappy-change organisers', 'Nursing chairs']]
+];
+function sections() {
+  const cats = categories(), used = new Set(SECTIONS.flatMap(([, cs]) => cs));
+  const out = SECTIONS.map(([t, cs]) => [t, cs.filter(c => cats.includes(c))]).filter(([, cs]) => cs.length);
+  const other = cats.filter(c => !used.has(c));
+  return other.length ? [...out, ['More', other]] : out;
+}
+const sortOptions = list => list.sort((a, b) => !!b.data.status - !!a.data.status || !!b.data.fav - !!a.data.fav || (b.data.specs?.Style === 'Jogging pram') - (a.data.specs?.Style === 'Jogging pram') || stockRank(a.data) - stockRank(b.data) || (lowest(a)?.price ?? 1e9) - (lowest(b)?.price ?? 1e9));
+function catTile(c) {
+  const ps = inCat(c), st = catStatus(c), lead = sortOptions([...ps]).find(photoOf), prices = ps.map(p => lowest(p)?.price).filter(Boolean);
+  return '<button class="catTile" data-cat="' + esc(c) + '"><span class="catImg">' + (lead ? '<img src="' + esc(photoOf(lead)) + '" alt="" loading="lazy">' : '') + '</span>' +
+    '<span class="catName">' + esc(c) + '</span><span class="catMeta">' + ps.length + ' option' + (ps.length === 1 ? '' : 's') + (prices.length ? ' · from ' + money(Math.min(...prices)) : '') + '</span>' +
+    '<span class="catStatus ' + st.toLowerCase() + '"><i class="dot ' + st.toLowerCase() + '"></i>' + st + '</span></button>';
+}
+function searchHits() {
+  const q = query.trim().toLowerCase(); if (!q) return [];
+  const words = q.split(/\s+/);
+  return sortOptions(products().filter(p => { const hay = [p.data.name, p.data.brand, p.data.category, p.data.feature].join(' ').toLowerCase(); return words.every(w => hay.includes(w)) }));
+}
+function searchResults() {
+  const hits = searchHits();
+  return hits.length ? '<p class="small" style="margin:0 2px 10px">' + hits.length + ' match' + (hits.length === 1 ? '' : 'es') + '</p><div class="grid">' + hits.map(p => card(p, true)).join('') + '</div>' : '<p class="empty">Nothing matches “' + esc(query) + '”.</p>';
+}
 function shop() {
   const cats = categories(); if (category !== 'all' && !cats.includes(category)) category = 'all';
-  const all = products(), favs = all.filter(p => p.data.fav && (category === 'all' || p.data.category === category)).length;
-  const list = all.filter(p => (category === 'all' || p.data.category === category) && (!favouritesOnly || p.data.fav))
-    .sort((a, b) => (a.data.category || '').localeCompare(b.data.category || '') || !!b.data.status - !!a.data.status || (b.data.specs?.Style === 'Jogging pram') - (a.data.specs?.Style === 'Jogging pram') || stockRank(a.data) - stockRank(b.data) || (lowest(a)?.price ?? 1e9) - (lowest(b)?.price ?? 1e9));
-  return head('Shop', 'Compare options, like them, and pick the one you’re buying.') + shopTabs('shop') +
-    '<div class="chips" role="group" aria-label="Categories"><button class="chip' + (category === 'all' ? ' active' : '') + '" data-cat="all">All</button>' +
-      cats.map(c => '<button class="chip' + (category === c ? ' active' : '') + '" data-cat="' + esc(c) + '"><i class="dot ' + catStatus(c).toLowerCase() + '"></i>' + esc(c) + '</button>').join('') + '</div>' +
-    '<div class="catHead"><h2>' + esc(category === 'all' ? 'Everything' : category) + '</h2>' + (category !== 'all' ? pill(catStatus(category)) : '') +
+  if (category === 'all') {
+    const open = cats.filter(c => ['Researching', 'Shortlisted'].includes(catStatus(c))).length;
+    return head('Shop', cats.length + ' categories · ' + open + ' still to decide') + shopTabs('shop') +
+      '<label class="searchBox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input id="shopSearch" type="search" placeholder="Search all options, brands or categories" value="' + esc(query) + '" autocomplete="off" enterkeyhint="search"></label>' +
+      '<div id="shopResults">' + (query.trim() ? searchResults() : sections().map(([t, cs]) => '<div class="catSection"><h2>' + esc(t) + '</h2><div class="catGrid">' + cs.map(catTile).join('') + '</div></div>').join('')) + '</div>' + compareBar();
+  }
+  const favs = inCat(category).filter(p => p.data.fav).length;
+  const list = sortOptions(inCat(category).filter(p => !favouritesOnly || p.data.fav));
+  return '<div class="catBar"><a class="backBtn" href="#shop" aria-label="All categories"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></a>' +
+      '<button class="catPick" id="catPick" aria-haspopup="dialog">' + esc(category) + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>' +
+    '<div class="catHead">' + pill(catStatus(category)) + '<span class="small">' + inCat(category).length + ' options</span>' +
       '<button class="chip' + (favouritesOnly ? ' active' : '') + '" data-filter aria-pressed="' + favouritesOnly + '">♡ Shortlist ' + favs + '</button></div>' +
-    (list.length ? '<div class="grid">' + list.map(p => card(p, category === 'all')).join('') + '</div>'
+    (list.length ? '<div class="grid">' + list.map(p => card(p, false)).join('') + '</div>'
       : '<p class="empty">' + (favouritesOnly ? 'Tap ♡ on an option to shortlist it.' : 'Nothing here yet. Tap + to add the first option.') + '</p>') +
     compareBar();
+}
+function catPicker() {
+  openDialog('Categories', '<button class="row" data-cat="all"><span class="rtitle">All categories<small>Browse by group or search</small></span>' + ICON.chev + '</button>' +
+    sections().map(([t, cs]) => '<h3 class="pickHead">' + esc(t) + '</h3><div class="group">' + cs.map(c => { const st = catStatus(c), n = inCat(c).length; return '<button class="row' + (c === category ? ' current' : '') + '" data-cat="' + esc(c) + '"><i class="dot ' + st.toLowerCase() + '"></i><span class="rtitle">' + esc(c) + '<small>' + n + ' option' + (n === 1 ? '' : 's') + ' · ' + st + '</small></span>' + (c === category ? '<b class="tick">✓</b>' : ICON.chev) + '</button>' }).join('') + '</div>').join(''));
 }
 function compareBar() {
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
@@ -419,13 +455,15 @@ async function unlock(form) {
 
 /* ---------- Shell ---------- */
 const ALIASES = { compare: 'shop', checklist: 'list' };
-function route() { const h = location.hash.slice(1); const r = ALIASES[h] || h; return ['home', 'shop', 'offers', 'list', 'ideas', 'budget'].includes(r) ? r : 'home' }
+function hashParts() { const [b, ...rest] = location.hash.slice(1).split('/'); let c = ''; try { c = decodeURIComponent(rest.join('/')) } catch {} return [ALIASES[b] || b, c] }
+function route() { const r = hashParts()[0]; return ['home', 'shop', 'offers', 'list', 'ideas', 'budget'].includes(r) ? r : 'home' }
+function goCat(c) { favouritesOnly = false; if (dlg.open) dlg.close(); location.hash = c && c !== 'all' ? '#shop/' + encodeURIComponent(c) : '#shop' }
 function tabLinks() {
   const r = route(), cur = r === 'offers' ? 'shop' : r, n = ofKind('idea').filter(x => !x.data.filed).length;
   return TABS.map(([k, label]) => '<a href="#' + k + '"' + (cur === k ? ' aria-current="page"' : '') + '>' + ICON[k] + '<span>' + label + '</span>' + (k === 'ideas' && n ? '<b class="badge">' + n + '</b>' : '') + '</a>').join('');
 }
 function render() {
-  stale = false; const key = route();
+  stale = false; const key = route(); if (key === 'shop') category = hashParts()[1] || 'all';
   document.body.classList.toggle('locked', !token); status();
   if (!token) { view.innerHTML = gate(); $('#tabbar').innerHTML = ''; $('#toptabs').innerHTML = ''; $('#fab').classList.add('hidden'); return }
   view.innerHTML = { home, shop, offers, list: checklist, ideas, budget }[key]();
@@ -443,7 +481,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
   if (d.fav) { const p = byId(d.fav); patch(p.id, { fav: !p.data.fav }) }
   else if ('filter' in d) { favouritesOnly = !favouritesOnly; rerenderKeep() }
-  else if (d.cat) { category = d.cat; store.set('ll-cat', category); render() }
+  else if (d.cat) goCat(d.cat);
   else if (d.offers) { specialsOnly = d.offers === 'sale'; render() }
   else if (d.compare) { selected.has(d.compare) ? selected.delete(d.compare) : selected.add(d.compare); if (dlg.open) refreshSheet(d.compare); rerenderKeep() }
   else if (d.details) detail(d.details);
@@ -455,7 +493,7 @@ document.addEventListener('click', e => {
   else if (d.delnote) { const p = byId(d.id); patch(d.id, { notes: (p.data.notes || []).filter((_, i) => i !== Number(d.delnote)) }) }
   else if (d.tolist) ideaToList(d.tolist);
   else if (d.tooption) ideaToOption(d.tooption);
-  else if (d.gocat) { category = d.gocat; store.set('ll-cat', category); favouritesOnly = false; if (dlg.open) dlg.close(); location.hash = '#shop'; render() }
+  else if (d.gocat) goCat(d.gocat);
   else if (d.edit) productForm(d.edit);
   else if (d.remove) { const x = byId(d.remove); if (x && confirm('Remove “' + (x.data.name || 'this idea') + '” for both of you?')) { if (dlg.open) dlg.close(); removeEntry(d.remove); rerenderKeep() } }
   else if (d.unpend) { const [p] = pending.splice(Number(d.unpend), 1); p.url && URL.revokeObjectURL(p.url); drawPending() }
@@ -465,6 +503,7 @@ document.addEventListener('click', e => {
   else if (b.id === 'compareBtn' && selected.size >= 2) comparison();
   else if (b.id === 'clearCompare') { selected.clear(); rerenderKeep() }
   else if (b.id === 'menu') settings();
+  else if (b.id === 'catPick') catPicker();
   else if (b.id === 'syncNow') { sync(true).then(() => { if (dlg.open) settings() }) }
   else if (b.id === 'checkUpdate' || b.id === 'applyUpdate') checkForUpdate(true);
   else if (b.id === 'installBtn') { deferredInstall?.prompt(); deferredInstall = null }
@@ -488,6 +527,11 @@ document.addEventListener('submit', e => {
     const f = new FormData(form), name = f.get('item').trim(); if (!name) return;
     put({ id: newId(), kind: 'item', data: { group: Number(f.get('group')), name, note: f.get('note').trim(), done: false } }); dlg.close(); render(); announce('Added to the checklist');
   }
+});
+document.addEventListener('input', e => {
+  if (e.target.id !== 'shopSearch') return;
+  query = e.target.value; const r = $('#shopResults');
+  if (r) r.innerHTML = query.trim() ? searchResults() : sections().map(([t, cs]) => '<div class="catSection"><h2>' + esc(t) + '</h2><div class="catGrid">' + cs.map(catTile).join('') + '</div></div>').join('');
 });
 document.addEventListener('paste', e => {
   if (route() !== 'ideas' || !token || dlg.open) return;
