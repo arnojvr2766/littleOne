@@ -525,8 +525,9 @@ async function checkForUpdate(apply) {
   }
 }
 if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
-  let reloading = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloading) { reloading = true; location.reload() } });
+  let reloading = false; const hadController = !!navigator.serviceWorker.controller;
+  // Reload only when a new version takes over, not when the very first worker starts controlling the page.
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloading) { reloading = true; location.reload() } });
   navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' }).then(r => {
     reg = r;
     if (r.waiting && navigator.serviceWorker.controller) showUpdate(r.waiting);
