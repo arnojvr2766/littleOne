@@ -343,7 +343,8 @@ body.locked .tabbar,body.locked .fab,body.locked #menu{display:none}
 .tile.warn strong{color:#9a6a12}
 .tileSub{display:block;font:600 12px var(--round);color:var(--sub)}
 .monthHead{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);margin:16px 4px 8px}
-.expense{display:flex;gap:12px;width:100%;text-align:left;padding:12px 14px;margin-bottom:8px;border:0;background:var(--card);border-radius:14px;box-shadow:0 0 0 1px var(--line);color:var(--text)}
+.expense{margin-bottom:8px;background:var(--card);border-radius:14px;box-shadow:0 0 0 1px var(--line);overflow:hidden}
+.exTap{display:flex;gap:12px;width:100%;text-align:left;padding:12px 14px 8px;border:0;background:none;color:var(--text)}
 .exMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .exMain small{color:var(--sub);font-size:13px}
 .exAmt{text-align:right;white-space:nowrap;display:flex;flex-direction:column;gap:1px}
@@ -354,3 +355,17 @@ body.locked .tabbar,body.locked .fab,body.locked #menu{display:none}
 .claim.unclaimed,.claim.submitted{background:#f6ead2;color:#80591a}
 .claim.paid,.claim.partial{background:var(--sage-soft);color:var(--green-2)}
 .claim.rejected{background:var(--coral-soft);color:var(--red)}
+
+.exFiles{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 14px 12px}
+.exFiles.inForm{padding:4px 0 0}
+.fthumb{display:grid;place-items:center;width:46px;height:46px;border-radius:9px;overflow:hidden;background:var(--sage-faint);font:800 11px var(--round);color:var(--green-2);text-decoration:none;box-shadow:0 0 0 1px var(--line)}
+.fthumb img{width:100%;height:100%;object-fit:cover}
+.inForm .fthumb{width:72px;height:72px}
+.fwrap{position:relative}
+.fwrap button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--green);color:#fff;font-size:14px;line-height:1;padding:0}
+.exAdd{display:inline-flex;align-items:center;gap:6px;height:46px;min-width:46px;justify-content:center;padding:0 12px;border-radius:9px;border:1px dashed #b8c4b4;background:#fbfcf9;color:var(--green);font:650 13px var(--round);cursor:pointer}
+.exAdd svg{width:18px;height:18px}
+.exAdd.big{height:72px;padding:0 16px}
+.qbtn.link{text-decoration:none}
+.qbtn.link svg{width:17px;height:17px}
+@media (max-width:420px){.quick{gap:5px}.qbtn{min-width:38px;padding:0 8px}}

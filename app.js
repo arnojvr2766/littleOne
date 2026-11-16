@@ -38,7 +38,8 @@ const ICON = {
   budget: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><path d="M16 14.5h2"/></svg>',
   chev: '<svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
   clip: '<svg viewBox="0 0 24 24"><path d="M20 11.5 12.4 19a5 5 0 0 1-7.1-7.1l8-8a3.4 3.4 0 0 1 4.8 4.8l-7.9 7.9a1.7 1.7 0 0 1-2.4-2.4l7.2-7.2"/></svg>',
-  cmp: '<svg viewBox="0 0 24 24"><path d="M7 4v16M17 4v16"/><path d="M3 8h8M13 16h8"/></svg>'
+  cmp: '<svg viewBox="0 0 24 24"><path d="M7 4v16M17 4v16"/><path d="M3 8h8M13 16h8"/></svg>',
+  ext: '<svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
 };
 const TABS = [['home', 'Home'], ['shop', 'Shop'], ['list', 'Checklist'], ['ideas', 'Ideas'], ['budget', 'Budget']];
 
@@ -133,6 +134,10 @@ function imageTag(p, cls = '') {
   const src = photoOf(p);
   return src ? '<img class="' + cls + '" src="' + esc(src) + '" alt="' + esc(title(p)) + '" loading="lazy">' : '<span class="noPhoto ' + cls + '" aria-hidden="true">' + esc((p.data.name || '?')[0].toUpperCase()) + '</span>';
 }
+function shopLink(p) {
+  const os = [...(p.data.offers || [])].filter(o => safeUrl(o.link)).sort((a, b) => (a.stock === 'out') - (b.stock === 'out') || a.price - b.price);
+  return os[0] ? { url: os[0].link, label: os[0].shop } : safeUrl(p.data.source) ? { url: p.data.source, label: 'product page' } : null;
+}
 function quickBar(p) {
   const d = p.data, id = esc(p.id), likes = d.likes || [], mine = likes.includes(deviceId), notes = (d.notes || []).length, st = d.status, cmp = selected.has(p.id);
   return '<div class="quick">' +
@@ -141,6 +146,7 @@ function quickBar(p) {
     '<button class="qbtn cmp' + (cmp ? ' on' : '') + '" aria-pressed="' + cmp + '" data-compare="' + id + '" aria-label="Compare ' + esc(d.name) + '">' + ICON.cmp + '</button>' +
     (st === 'bought' ? '<button class="qbtn on wide" data-details="' + id + '">✓ Bought</button>'
       : '<button class="qbtn wide' + (st === 'chosen' ? ' on' : '') + '" aria-pressed="' + (st === 'chosen') + '" data-quickpick="' + id + '">★ ' + (st === 'chosen' ? 'Buying' : 'Buy') + '</button>') +
+    (shopLink(p) ? '<a class="qbtn link" href="' + esc(shopLink(p).url) + '" target="_blank" rel="noopener noreferrer" aria-label="Open ' + esc(d.name) + ' at ' + esc(shopLink(p).label) + '" title="' + esc(shopLink(p).label) + '">' + ICON.ext + '</a>' : '') +
     '</div>';
 }
 function card(p, showCat) {
@@ -470,10 +476,29 @@ function medical() {
     (list.length ? list.map(x => {
       const d = x.data, m = d.date ? new Date(d.date).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' }) : 'No date';
       const headRow = m !== month ? (month = m, '<h3 class="monthHead">' + esc(m) + '</h3>') : '';
-      return headRow + '<button class="expense" data-expense="' + esc(x.id) + '"><span class="exMain"><b>' + esc(d.what || d.type || 'Medical expense') + '</b><small>' + esc([d.provider, d.date ? new Date(d.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · ')) + (d.files?.length ? ' · 📎 ' + d.files.length : '') + '</small>' + claimPill(d.status) + '</span>' +
-        '<span class="exAmt"><b>' + money(d.total || 0) + '</b>' + (aidOf(x) ? '<small>Aid ' + money(aidOf(x)) + '</small>' : '') + (gapOf(x) ? '<small class="' + (isWaiting(x) ? 'wait' : 'oop') + '">' + (isWaiting(x) ? 'Claimable ' : 'Ours ') + money(gapOf(x)) + '</small>' : '') + '</span></button>';
+      return headRow + '<div class="expense"><button class="exTap" data-expense="' + esc(x.id) + '"><span class="exMain"><b>' + esc(d.what || d.type || 'Medical expense') + '</b><small>' + esc([d.provider, d.date ? new Date(d.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · ')) + '</small>' + claimPill(d.status) + '</span>' +
+        '<span class="exAmt"><b>' + money(d.total || 0) + '</b>' + (aidOf(x) ? '<small>Aid ' + money(aidOf(x)) + '</small>' : '') + (gapOf(x) ? '<small class="' + (isWaiting(x) ? 'wait' : 'oop') + '">' + (isWaiting(x) ? 'Claimable ' : 'Ours ') + money(gapOf(x)) + '</small>' : '') + '</span></button>' +
+        '<div class="exFiles">' + (d.files || []).map(fileThumb).join('') + '<button class="exAdd" data-attach="' + esc(x.id) + '" aria-label="Add an invoice or photo to ' + esc(d.what || 'this expense') + '">' + ICON.clip + (d.files?.length ? '' : '<span>Add invoice or photo</span>') + '</button></div></div>';
     }).join('') : '<p class="empty">' + (all.length ? 'Nothing in this filter.' : 'No medical expenses yet. Tap + to add a bill, receipt or claim.') + '</p>') +
     '<p class="hint">Out of pocket counts finished claims only. Bills not claimed yet or still with medical aid sit under Waiting until you update them.</p>';
+}
+function fileThumb(f) {
+  const u = urls[f.path];
+  if (!u) return '<span class="fthumb doc" title="' + esc(f.name) + '">' + (f.type === 'application/pdf' ? 'PDF' : 'File') + '</span>';
+  return '<a class="fthumb' + (f.type.startsWith('image/') ? '' : ' doc') + '" href="' + esc(u) + '" target="_blank" rel="noopener" title="' + esc(f.name) + '">' + (f.type.startsWith('image/') ? '<img src="' + esc(u) + '" alt="' + esc(f.name) + '" loading="lazy">' : 'PDF') + '</a>';
+}
+let exDraft = { files: [], pending: [] };
+function drawExFiles() {
+  const box = $('#exFiles'); if (!box) return;
+  box.innerHTML = exDraft.files.map((f, i) => '<span class="fwrap">' + fileThumb(f) + '<button type="button" data-unattach="' + i + '" aria-label="Remove ' + esc(f.name) + '">×</button></span>').join('') +
+    exDraft.pending.map((p, i) => '<span class="fwrap">' + (p.url ? '<span class="fthumb"><img src="' + p.url + '" alt=""></span>' : '<span class="fthumb doc">PDF</span>') + '<button type="button" data-unpendex="' + i + '" aria-label="Remove">×</button></span>').join('') +
+    '<label class="exAdd big">' + ICON.clip + '<span>Add invoice or photo</span><input type="file" id="exPick" accept="image/*,application/pdf" multiple hidden></label>';
+}
+async function quickAttach(id, files) {
+  const x = byId(id); if (!x || !files.length) return;
+  announce('Uploading…');
+  try { const added = []; for (const f of files) added.push(await uploadFile(f)); await put({ ...x, data: { ...x.data, files: [...(x.data.files || []), ...added] } }); rerenderKeep(); announce(added.length + ' file' + (added.length === 1 ? '' : 's') + ' saved') }
+  catch (e) { announce(e.message) }
 }
 function expenseForm(id) {
   const x = id ? byId(id) : null, d = x?.data || { date: new Date().toISOString().slice(0, 10), status: 'unclaimed' };
@@ -488,10 +513,11 @@ function expenseForm(id) {
     '<label class="field">Medical aid paid (R) <small>Paid to the provider or refunded to us</small><input name="aidPaid" type="number" inputmode="decimal" min="0" step="0.01" value="' + esc(d.aidPaid || '') + '"></label>' +
     '<label class="field">Paid from <small>Optional</small><select name="cover">' + opt(COVER, d.cover || '') + '</select></label>' +
     '<label class="field">Claim reference <small>Optional</small><input name="ref" maxlength="60" value="' + esc(d.ref) + '"></label>' +
-    '<label class="field">Receipts or invoices <small>Photos or PDFs</small><input name="files" type="file" accept="image/*,application/pdf" multiple></label>' +
-    (d.files?.length ? '<div class="field wide">Attached<div class="ideaFile">' + d.files.map(f => urls[f.path] ? link(urls[f.path], f.name) : '<span class="small">' + esc(f.name) + '</span>').join('') + '</div></div>' : '') +
+    '<div class="field wide">Invoices, receipts and photos <small>Take a photo or choose a PDF; they’re saved with this expense</small><div class="exFiles inForm" id="exFiles"></div></div>' +
     '<label class="field wide">Notes <small>Optional</small><textarea name="note" maxlength="600" rows="2">' + esc(d.note) + '</textarea></label>' +
     '<p class="error wide" role="alert"></p><div class="formActions wide"><button class="primary">' + (x ? 'Save' : 'Add expense') + '</button><button type="button" class="ghost" data-cancel>Cancel</button>' + (x ? '<button type="button" class="ghost danger" data-remove="' + esc(x.id) + '">Delete</button>' : '') + '</div></form>');
+  exDraft.pending.forEach(p => p.url && URL.revokeObjectURL(p.url));
+  exDraft = { files: [...(d.files || [])], pending: [] }; drawExFiles();
 }
 async function saveExpense(form) {
   const f = new FormData(form), old = form.dataset.id ? byId(form.dataset.id) : null, btn = form.querySelector('.primary'), err = form.querySelector('.error');
@@ -499,10 +525,12 @@ async function saveExpense(form) {
   let aidPaid = Number(f.get('aidPaid')) || 0;
   if (status === 'paid' && !aidPaid) aidPaid = total;
   if (aidPaid > total) { err.textContent = 'Medical aid can’t have paid more than the total.'; return }
-  const data = { ...(old?.data || {}), what: f.get('what').trim(), date: f.get('date'), provider: f.get('provider').trim(), type: f.get('type'), total, status, aidPaid, cover: f.get('cover'), ref: f.get('ref').trim(), note: f.get('note').trim(), files: old?.data.files || [] };
+  const data = { ...(old?.data || {}), what: f.get('what').trim(), date: f.get('date'), provider: f.get('provider').trim(), type: f.get('type'), total, status, aidPaid, cover: f.get('cover'), ref: f.get('ref').trim(), note: f.get('note').trim(), files: [...exDraft.files] };
   btn.disabled = true; err.textContent = '';
   try {
-    for (const file of f.getAll('files')) if (file && file.size) data.files.push(await uploadFile(file));
+    if (exDraft.pending.length) btn.textContent = 'Uploading…';
+    for (const p of exDraft.pending) data.files.push(await uploadFile(p.file));
+    exDraft.pending.forEach(p => p.url && URL.revokeObjectURL(p.url)); exDraft.pending = [];
     dlg.close(); await put({ id: old?.id || newId(), kind: 'expense', data }); render(); announce(old ? 'Saved' : 'Expense added');
   } catch (e) { err.textContent = e.message; btn.disabled = false }
 }
@@ -563,6 +591,9 @@ document.addEventListener('click', e => {
   else if (d.compare) { selected.has(d.compare) ? selected.delete(d.compare) : selected.add(d.compare); if (dlg.open) refreshSheet(d.compare); rerenderKeep() }
   else if (d.details) detail(d.details);
   else if (d.expense) expenseForm(d.expense);
+  else if (d.attach) { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*,application/pdf'; inp.multiple = true; inp.onchange = () => quickAttach(d.attach, [...inp.files]); inp.click() }
+  else if (d.unattach) { exDraft.files.splice(Number(d.unattach), 1); drawExFiles() }
+  else if (d.unpendex) { const [p] = exDraft.pending.splice(Number(d.unpendex), 1); p?.url && URL.revokeObjectURL(p.url); drawExFiles() }
   else if (d.medfilter) { medFilter = d.medfilter; rerenderKeep() }
   else if ('status' in d && d.id) setStatus(d.id, d.status);
   else if (d.notes) notesSheet(d.notes);
@@ -593,6 +624,7 @@ document.addEventListener('change', e => {
   const d = e.target.dataset;
   if (d.done) { const x = byId(d.done), done = e.target.checked; put({ ...x, data: { ...x.data, done } }); if (done) announce('✓ ' + x.data.name); setTimeout(rerenderKeep, done ? 350 : 0) }
   else if (e.target.id === 'pick') { addPending(e.target.files); e.target.value = '' }
+  else if (e.target.id === 'exPick') { for (const file of e.target.files) { if (file.size > 25e6) { announce('That file is too large.'); continue } exDraft.pending.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : '' }) } e.target.value = ''; drawExFiles() }
 });
 document.addEventListener('submit', e => {
   e.preventDefault(); const form = e.target;
