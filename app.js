@@ -123,7 +123,7 @@ const inCat = c => products().filter(p => p.data.category === c);
 const catStatus = c => { const ps = inCat(c); return ps.some(p => p.data.status === 'bought') ? 'Bought' : ps.some(p => p.data.status === 'chosen') ? 'Decided' : ps.some(p => p.data.fav) ? 'Shortlisted' : 'Researching' };
 const pill = st => '<span class="pill ' + st.toLowerCase() + '">' + st + '</span>';
 const stockTag = d => d.stock === 'in' ? '<span class="stock in">In stock</span>' : d.stock === 'out' ? '<span class="stock out">Out of stock</span>' : d.stock === 'unknown' ? '<span class="stock">Stock unconfirmed</span>' : '';
-const specOrder = ['Style', 'Good for running', 'Heart rate', 'Oxygen level', 'Breathing movement', 'Sleep tracking', 'Camera', 'Worn on baby', 'Video', 'Parent screen', 'Works without Wi-Fi or app', 'Pan and tilt', 'Sensors', 'Subscription', 'Breathing or vitals', 'Medical status', 'Price per bottle', 'Anti-colic system', 'Teat shape', 'Parts to wash', 'Type', 'From', 'Up to', 'Grows into', 'Footprint', 'Fits', 'Folds', 'Tray', 'Fits a 70 × 50 cm mat (e.g. Mavis)', 'Size', 'Storage', 'Motion', 'Recline', 'Footrest', 'Availability', 'Pram weight', 'Folded size', 'Fold', 'Newborn walks', 'Suitable for', 'Includes', 'Type', 'Standard'];
+const specOrder = ['Style', 'Good for running', 'Heart rate', 'Oxygen level', 'Breathing movement', 'Sleep tracking', 'Camera', 'Worn on baby', 'Video', 'Parent screen', 'Works without Wi-Fi or app', 'Pan and tilt', 'Sensors', 'Subscription', 'Breathing or vitals', 'Medical status', 'What’s stored', 'Storage term', 'Price', 'Payment', 'Medical aid', 'Arrange by', 'Price per bottle', 'Anti-colic system', 'Teat shape', 'Parts to wash', 'Type', 'From', 'Up to', 'Grows into', 'Footprint', 'Fits', 'Folds', 'Tray', 'Fits a 70 × 50 cm mat (e.g. Mavis)', 'Size', 'Storage', 'Motion', 'Recline', 'Footrest', 'Availability', 'Pram weight', 'Folded size', 'Fold', 'Newborn walks', 'Suitable for', 'Includes', 'Type', 'Standard'];
 const rank = k => { const i = specOrder.indexOf(k); return i < 0 ? 99 : i };
 const specKeys = ps => [...new Set(ps.flatMap(p => Object.keys(p.data.specs || {})))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 const stockRank = d => ({ in: 0, unknown: 1, out: 2 }[d.stock] ?? 1);
@@ -193,6 +193,7 @@ const SECTIONS = [
   ['Sleep', ['Cots', 'Cot mattresses', 'Bedside cribs', 'Travel and camp cots']],
   ['Monitors', ['Breathing and vitals monitors', 'Camera and audio monitors']],
   ['Feeding', ['High chairs and feeding seats', 'Bottles', 'Breast pumps', 'Bottle washers and sterilisers']],
+  ['Health', ['Cord blood and stem cell banking']],
   ['Nursery and changing', ['Compactums and dressers', 'Changing mats', 'Nappy-change organisers', 'Nursing chairs']]
 ];
 function sections() {
@@ -419,8 +420,10 @@ function budget() {
   const sum = st => all.filter(p => p.data.status === st).reduce((t, p) => t + priceOf(p), 0);
   const spent = sum('bought'), toPay = sum('chosen'), planned = spent + toPay;
   const tile = (label, value, cls = '') => '<div class="tile ' + cls + '"><small>' + label + '</small><strong>' + value + '</strong></div>';
-  return head('Budget', 'What we’ve picked, what we’ve paid and what’s still open.') +
+  const med = medTotals();
+  return head('Budget', 'What we’ve picked, what we’ve paid and what’s still open.') + budgetTabs('budget') +
     '<div class="tiles">' + tile('Planned', money(planned)) + tile('Spent', money(spent)) + tile('Still to pay', money(toPay)) + (limit ? tile(limit - planned >= 0 ? 'Budget left' : 'Over budget', money(Math.abs(limit - planned)), limit - planned >= 0 ? '' : 'over') : '') + '</div>' +
+    (med.count ? '<a class="medLink" href="#medical"><span><b>Medical: ' + money(med.oop) + ' out of pocket</b><small>' + (med.waiting ? money(med.waiting) + ' waiting on medical aid' : 'No claims waiting') + '</small></span>' + ICON.chev + '</a>' : '') +
     '<div class="section"><h2>By category</h2><div class="group">' + cats.map(c => {
       const ps = inCat(c), picked = ps.filter(p => p.data.status), prices = ps.map(p => lowest(p)?.price).filter(Boolean);
       return '<div class="budgetRow"><div class="budgetHead"><button class="textbtn" data-gocat="' + esc(c) + '">' + esc(c) + '</button>' + pill(catStatus(c)) + '</div>' +
@@ -429,6 +432,79 @@ function budget() {
     }).join('') + '</div></div>' +
     '<form id="budgetForm" class="inlineForm" style="margin-top:20px"><label class="field">Our total budget (R)<input name="budget" type="number" inputmode="numeric" min="0" step="1" placeholder="Optional" value="' + esc(limit || '') + '"></label><button class="primary">Save</button></form>' +
     '<p class="hint">Tap ★ Buy on an option to add it here. Planned uses the lowest saved shop price.</p>';
+}
+
+/* ---------- Medical expenses ---------- */
+const CLAIM = {
+  unclaimed: ['Not claimed yet', 'waiting'],
+  submitted: ['Claim submitted', 'waiting'],
+  partial: ['Partly paid by medical aid', 'done'],
+  paid: ['Paid in full by medical aid', 'done'],
+  rejected: ['Claim rejected', 'done'],
+  self: ['Not claimable / paying ourselves', 'done']
+};
+const MED_TYPES = ['Gynae or obstetrician', 'Scan or sonar', 'Blood tests or pathology', 'Hospital and delivery', 'Paediatrician', 'Medication or pharmacy', 'Antenatal classes', 'Midwife or doula', 'Lactation consultant', 'Stem cell banking', 'Other'];
+const COVER = ['', 'Day-to-day benefits or savings', 'Hospital benefit', 'Gap cover', 'Not covered'];
+let medFilter = 'all';
+const expenses = () => ofKind('expense').sort((a, b) => (b.data.date || '').localeCompare(a.data.date || '') || b.created_at.localeCompare(a.created_at));
+const aidOf = x => Math.min(Number(x.data.aidPaid) || 0, Number(x.data.total) || 0);
+const gapOf = x => Math.max(0, (Number(x.data.total) || 0) - aidOf(x));
+const isWaiting = x => (CLAIM[x.data.status] || CLAIM.unclaimed)[1] === 'waiting';
+function medTotals() {
+  const xs = expenses();
+  return { count: xs.length, billed: xs.reduce((t, x) => t + (Number(x.data.total) || 0), 0), aid: xs.reduce((t, x) => t + aidOf(x), 0),
+    oop: xs.filter(x => !isWaiting(x)).reduce((t, x) => t + gapOf(x), 0), waiting: xs.filter(isWaiting).reduce((t, x) => t + gapOf(x), 0), waitingN: xs.filter(isWaiting).length };
+}
+function budgetTabs(active) {
+  return '<div class="segment" role="tablist"><a href="#budget"' + (active === 'budget' ? ' aria-current="page"' : '') + '>Shopping</a><a href="#medical"' + (active === 'medical' ? ' aria-current="page"' : '') + '>Medical' + (medTotals().waitingN ? ' · ' + medTotals().waitingN + ' waiting' : '') + '</a></div>';
+}
+const claimPill = st => { const [label, kind] = CLAIM[st] || CLAIM.unclaimed; return '<span class="claim ' + (st || 'unclaimed') + '">' + (kind === 'waiting' ? '⏳ ' : st === 'rejected' ? '✕ ' : '✓ ') + label + '</span>' };
+function medical() {
+  const t = medTotals(), all = expenses();
+  const list = all.filter(x => medFilter === 'all' || (medFilter === 'waiting' ? isWaiting(x) : !isWaiting(x) && gapOf(x) > 0));
+  const tile = (label, value, cls = '') => '<div class="tile ' + cls + '"><small>' + label + '</small><strong>' + value + '</strong></div>';
+  let month = '';
+  return head('Budget', 'Medical bills, what medical aid paid, and claims still open.') + budgetTabs('medical') +
+    '<div class="tiles">' + tile('Total billed', money(t.billed)) + tile('Medical aid paid', money(t.aid)) + tile('Out of pocket', money(t.oop)) + tile('Waiting on claims', money(t.waiting) + (t.waitingN ? '<small class="tileSub">' + t.waitingN + ' claim' + (t.waitingN === 1 ? '' : 's') + '</small>' : ''), t.waiting ? 'warn' : '') + '</div>' +
+    '<div class="chips" style="margin-top:14px"><button class="chip' + (medFilter === 'all' ? ' active' : '') + '" data-medfilter="all">All</button><button class="chip' + (medFilter === 'waiting' ? ' active' : '') + '" data-medfilter="waiting">Waiting on medical aid</button><button class="chip' + (medFilter === 'oop' ? ' active' : '') + '" data-medfilter="oop">Out of pocket</button></div>' +
+    (list.length ? list.map(x => {
+      const d = x.data, m = d.date ? new Date(d.date).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' }) : 'No date';
+      const headRow = m !== month ? (month = m, '<h3 class="monthHead">' + esc(m) + '</h3>') : '';
+      return headRow + '<button class="expense" data-expense="' + esc(x.id) + '"><span class="exMain"><b>' + esc(d.what || d.type || 'Medical expense') + '</b><small>' + esc([d.provider, d.date ? new Date(d.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · ')) + (d.files?.length ? ' · 📎 ' + d.files.length : '') + '</small>' + claimPill(d.status) + '</span>' +
+        '<span class="exAmt"><b>' + money(d.total || 0) + '</b>' + (aidOf(x) ? '<small>Aid ' + money(aidOf(x)) + '</small>' : '') + (gapOf(x) ? '<small class="' + (isWaiting(x) ? 'wait' : 'oop') + '">' + (isWaiting(x) ? 'Claimable ' : 'Ours ') + money(gapOf(x)) + '</small>' : '') + '</span></button>';
+    }).join('') : '<p class="empty">' + (all.length ? 'Nothing in this filter.' : 'No medical expenses yet. Tap + to add a bill, receipt or claim.') + '</p>') +
+    '<p class="hint">Out of pocket counts finished claims only. Bills not claimed yet or still with medical aid sit under Waiting until you update them.</p>';
+}
+function expenseForm(id) {
+  const x = id ? byId(id) : null, d = x?.data || { date: new Date().toISOString().slice(0, 10), status: 'unclaimed' };
+  const opt = (list, v) => list.map(o => '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o || 'Choose…') + '</option>').join('');
+  openDialog(x ? 'Edit medical expense' : 'New medical expense', '<form id="expenseForm" class="formGrid" data-id="' + esc(id || '') + '">' +
+    '<label class="field wide">What was it for?<input name="what" required maxlength="100" placeholder="e.g. 20-week scan" value="' + esc(d.what) + '"></label>' +
+    '<label class="field">Date<input name="date" type="date" value="' + esc(d.date) + '"></label>' +
+    '<label class="field">Provider<input name="provider" maxlength="80" placeholder="Doctor, hospital, pharmacy" value="' + esc(d.provider) + '"></label>' +
+    '<label class="field">Type<select name="type">' + opt(MED_TYPES, d.type || 'Other') + '</select></label>' +
+    '<label class="field">Total billed (R)<input name="total" type="number" inputmode="decimal" min="0" step="0.01" required value="' + esc(d.total) + '"></label>' +
+    '<label class="field wide">Claim status<select name="status">' + Object.entries(CLAIM).map(([k, [label]]) => '<option value="' + k + '"' + (k === (d.status || 'unclaimed') ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>' +
+    '<label class="field">Medical aid paid (R) <small>Paid to the provider or refunded to us</small><input name="aidPaid" type="number" inputmode="decimal" min="0" step="0.01" value="' + esc(d.aidPaid || '') + '"></label>' +
+    '<label class="field">Paid from <small>Optional</small><select name="cover">' + opt(COVER, d.cover || '') + '</select></label>' +
+    '<label class="field">Claim reference <small>Optional</small><input name="ref" maxlength="60" value="' + esc(d.ref) + '"></label>' +
+    '<label class="field">Receipts or invoices <small>Photos or PDFs</small><input name="files" type="file" accept="image/*,application/pdf" multiple></label>' +
+    (d.files?.length ? '<div class="field wide">Attached<div class="ideaFile">' + d.files.map(f => urls[f.path] ? link(urls[f.path], f.name) : '<span class="small">' + esc(f.name) + '</span>').join('') + '</div></div>' : '') +
+    '<label class="field wide">Notes <small>Optional</small><textarea name="note" maxlength="600" rows="2">' + esc(d.note) + '</textarea></label>' +
+    '<p class="error wide" role="alert"></p><div class="formActions wide"><button class="primary">' + (x ? 'Save' : 'Add expense') + '</button><button type="button" class="ghost" data-cancel>Cancel</button>' + (x ? '<button type="button" class="ghost danger" data-remove="' + esc(x.id) + '">Delete</button>' : '') + '</div></form>');
+}
+async function saveExpense(form) {
+  const f = new FormData(form), old = form.dataset.id ? byId(form.dataset.id) : null, btn = form.querySelector('.primary'), err = form.querySelector('.error');
+  const status = f.get('status'), total = Number(f.get('total')) || 0;
+  let aidPaid = Number(f.get('aidPaid')) || 0;
+  if (status === 'paid' && !aidPaid) aidPaid = total;
+  if (aidPaid > total) { err.textContent = 'Medical aid can’t have paid more than the total.'; return }
+  const data = { ...(old?.data || {}), what: f.get('what').trim(), date: f.get('date'), provider: f.get('provider').trim(), type: f.get('type'), total, status, aidPaid, cover: f.get('cover'), ref: f.get('ref').trim(), note: f.get('note').trim(), files: old?.data.files || [] };
+  btn.disabled = true; err.textContent = '';
+  try {
+    for (const file of f.getAll('files')) if (file && file.size) data.files.push(await uploadFile(file));
+    dlg.close(); await put({ id: old?.id || newId(), kind: 'expense', data }); render(); announce(old ? 'Saved' : 'Expense added');
+  } catch (e) { err.textContent = e.message; btn.disabled = false }
 }
 
 /* ---------- Settings / app info ---------- */
@@ -457,20 +533,20 @@ async function unlock(form) {
 /* ---------- Shell ---------- */
 const ALIASES = { compare: 'shop', checklist: 'list' };
 function hashParts() { const [b, ...rest] = location.hash.slice(1).split('/'); let c = ''; try { c = decodeURIComponent(rest.join('/')) } catch {} return [ALIASES[b] || b, c] }
-function route() { const r = hashParts()[0]; return ['home', 'shop', 'offers', 'list', 'ideas', 'budget'].includes(r) ? r : 'home' }
+function route() { const r = hashParts()[0]; return ['home', 'shop', 'offers', 'list', 'ideas', 'budget', 'medical'].includes(r) ? r : 'home' }
 function goCat(c) { favouritesOnly = false; if (dlg.open) dlg.close(); location.hash = c && c !== 'all' ? '#shop/' + encodeURIComponent(c) : '#shop' }
 function tabLinks() {
-  const r = route(), cur = r === 'offers' ? 'shop' : r, n = ofKind('idea').filter(x => !x.data.filed).length;
+  const r = route(), cur = r === 'offers' ? 'shop' : r === 'medical' ? 'budget' : r, n = ofKind('idea').filter(x => !x.data.filed).length;
   return TABS.map(([k, label]) => '<a href="#' + k + '"' + (cur === k ? ' aria-current="page"' : '') + '>' + ICON[k] + '<span>' + label + '</span>' + (k === 'ideas' && n ? '<b class="badge">' + n + '</b>' : '') + '</a>').join('');
 }
 function render() {
   stale = false; const key = route(); if (key === 'shop') category = hashParts()[1] || 'all';
   document.body.classList.toggle('locked', !token); status();
   if (!token) { view.innerHTML = gate(); $('#tabbar').innerHTML = ''; $('#toptabs').innerHTML = ''; $('#fab').classList.add('hidden'); return }
-  view.innerHTML = { home, shop, offers, list: checklist, ideas, budget }[key]();
+  view.innerHTML = { home, shop, offers, list: checklist, ideas, budget, medical }[key]();
   $('#tabbar').innerHTML = $('#toptabs').innerHTML = tabLinks();
-  $('#fab').classList.toggle('hidden', !['shop', 'list', 'ideas'].includes(key));
-  $('#fab').setAttribute('aria-label', key === 'shop' ? 'Add an option' : key === 'list' ? 'Add to the checklist' : 'New idea');
+  $('#fab').classList.toggle('hidden', !['shop', 'list', 'ideas', 'medical'].includes(key));
+  $('#fab').setAttribute('aria-label', key === 'shop' ? 'Add an option' : key === 'list' ? 'Add to the checklist' : key === 'medical' ? 'Add a medical expense' : 'New idea');
   if (key !== 'shop') document.body.classList.remove('has-compare');
   document.querySelector('.chips .active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
   if (key === 'ideas') drawPending();
@@ -486,6 +562,8 @@ document.addEventListener('click', e => {
   else if (d.offers) { specialsOnly = d.offers === 'sale'; render() }
   else if (d.compare) { selected.has(d.compare) ? selected.delete(d.compare) : selected.add(d.compare); if (dlg.open) refreshSheet(d.compare); rerenderKeep() }
   else if (d.details) detail(d.details);
+  else if (d.expense) expenseForm(d.expense);
+  else if (d.medfilter) { medFilter = d.medfilter; rerenderKeep() }
   else if ('status' in d && d.id) setStatus(d.id, d.status);
   else if (d.notes) notesSheet(d.notes);
   else if (d.quickpick) { const p = byId(d.quickpick); setStatus(p.id, p.data.status === 'chosen' ? '' : 'chosen') }
@@ -496,10 +574,10 @@ document.addEventListener('click', e => {
   else if (d.tooption) ideaToOption(d.tooption);
   else if (d.gocat) goCat(d.gocat);
   else if (d.edit) productForm(d.edit);
-  else if (d.remove) { const x = byId(d.remove); if (x && confirm('Remove “' + (x.data.name || 'this idea') + '” for both of you?')) { if (dlg.open) dlg.close(); removeEntry(d.remove); rerenderKeep() } }
+  else if (d.remove) { const x = byId(d.remove); if (x && confirm('Remove “' + (x.data.name || x.data.what || 'this idea') + '” for both of you?')) { if (dlg.open) dlg.close(); removeEntry(d.remove); rerenderKeep() } }
   else if (d.unpend) { const [p] = pending.splice(Number(d.unpend), 1); p.url && URL.revokeObjectURL(p.url); drawPending() }
   else if ('cancel' in d || b.id === 'close') dlg.close();
-  else if (b.id === 'fab') { const r = route(); if (r === 'shop') productForm(); else if (r === 'list') itemForm(); else if (r === 'ideas') { scrollTo({ top: 0, behavior: 'smooth' }); $('#composer textarea')?.focus() } }
+  else if (b.id === 'fab') { const r = route(); if (r === 'shop') productForm(); else if (r === 'list') itemForm(); else if (r === 'medical') expenseForm(); else if (r === 'ideas') { scrollTo({ top: 0, behavior: 'smooth' }); $('#composer textarea')?.focus() } }
   else if (b.id === 'moreOffers') $('#offerRows').insertAdjacentHTML('beforeend', offerInputs());
   else if (b.id === 'compareBtn' && selected.size >= 2) comparison();
   else if (b.id === 'clearCompare') { selected.clear(); rerenderKeep() }
@@ -523,6 +601,7 @@ document.addEventListener('submit', e => {
   else if (form.id === 'composer') saveIdea(form);
   else if (form.id === 'boughtForm') setStatus(form.dataset.id, 'bought', Number(form.paid.value) || undefined);
   else if (form.id === 'noteForm') { const t = form.note.value.trim(), p = byId(form.dataset.id); if (t && p) patch(p.id, { notes: [...(p.data.notes || []), { text: t, at: new Date().toISOString() }] }) }
+  else if (form.id === 'expenseForm') saveExpense(form);
   else if (form.id === 'budgetForm') { put({ id: 'settings', kind: 'settings', data: { ...(byId('settings')?.data || {}), budget: Number(form.budget.value) || 0 } }); render(); announce('Budget saved') }
   else if (form.matches('.newItem')) {
     const f = new FormData(form), name = f.get('item').trim(); if (!name) return;

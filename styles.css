@@ -336,3 +336,21 @@ body.locked .tabbar,body.locked .fab,body.locked #menu{display:none}
 .row .dot{margin-right:-2px}
 @media (min-width:900px){.catGrid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}.catImg{height:120px}.catImg img{max-height:106px}.catBar{top:66px}}
 @media (max-width:899px){.catImg{height:78px;margin-bottom:6px}.catImg img{max-height:66px}.catTile{padding-bottom:9px}.catSection{margin-bottom:16px}}
+
+/* ---- Medical expenses ---- */
+.medLink{display:flex;align-items:center;gap:10px;margin-top:10px;padding:12px 14px;background:var(--card);border-radius:14px;box-shadow:0 0 0 1px var(--line);text-decoration:none;color:var(--text)}
+.medLink span{flex:1}.medLink small{display:block;color:var(--sub);font-size:13px}
+.tile.warn strong{color:#9a6a12}
+.tileSub{display:block;font:600 12px var(--round);color:var(--sub)}
+.monthHead{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);margin:16px 4px 8px}
+.expense{display:flex;gap:12px;width:100%;text-align:left;padding:12px 14px;margin-bottom:8px;border:0;background:var(--card);border-radius:14px;box-shadow:0 0 0 1px var(--line);color:var(--text)}
+.exMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.exMain small{color:var(--sub);font-size:13px}
+.exAmt{text-align:right;white-space:nowrap;display:flex;flex-direction:column;gap:1px}
+.exAmt b{font:800 16px var(--round);color:var(--green)}
+.exAmt small{font-size:12px;color:var(--sub)}
+.exAmt .wait{color:#9a6a12}.exAmt .oop{color:var(--red)}
+.claim{align-self:flex-start;margin-top:4px;font:700 12px var(--round);padding:2px 9px;border-radius:12px;background:#eef0eb;color:var(--sub)}
+.claim.unclaimed,.claim.submitted{background:#f6ead2;color:#80591a}
+.claim.paid,.claim.partial{background:var(--sage-soft);color:var(--green-2)}
+.claim.rejected{background:var(--coral-soft);color:var(--red)}

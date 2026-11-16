@@ -1,2 +1,2 @@
 // Written by scripts/release.mjs. Do not edit by hand.
-self.LL_VERSION = { version: '2.1.2', build: '2026-11-15T17:27:44Z' };
+self.LL_VERSION = { version: '2.2.0', build: '2026-11-16T08:00:40Z' };
