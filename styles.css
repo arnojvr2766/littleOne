@@ -369,3 +369,20 @@ body.locked .tabbar,body.locked .fab,body.locked #menu{display:none}
 .qbtn.link{text-decoration:none}
 .qbtn.link svg{width:17px;height:17px}
 @media (max-width:420px){.quick{gap:5px}.qbtn{min-width:38px;padding:0 8px}}
+
+/* ---- Medical documents ---- */
+.segBadge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:#e9c27a;color:#5a3d08;font:800 11px var(--round)}
+.chip .cnt{font-weight:600;opacity:.7}
+.docGrid{display:grid;gap:10px}
+.docCard{background:var(--card);border-radius:var(--r);box-shadow:0 0 0 1px var(--line);overflow:hidden}
+.docTap{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;padding:12px 14px 6px;border:0;background:none;color:var(--text)}
+.docTap b{font:750 16px var(--round);color:var(--green)}
+.docTap small{color:var(--sub);font-size:13px}
+.docNote{font-size:14px;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:2px}
+.tagRow{display:flex;gap:6px;flex-wrap:wrap;padding:2px 14px 10px}
+.field .tagRow{padding:2px 0 0}
+.tag{border:1px solid var(--line);background:var(--sage-faint);color:var(--green-2);border-radius:14px;padding:4px 10px;font:700 12px var(--round);min-height:30px}
+.tag.on{background:var(--green);border-color:var(--green);color:#fff}
+.docFiles{padding-top:0}
+@media (min-width:900px){.docGrid{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}}
+.segment a{display:flex;align-items:center;justify-content:center;gap:2px;white-space:nowrap}

@@ -462,7 +462,8 @@ function medTotals() {
     oop: xs.filter(x => !isWaiting(x)).reduce((t, x) => t + gapOf(x), 0), waiting: xs.filter(isWaiting).reduce((t, x) => t + gapOf(x), 0), waitingN: xs.filter(isWaiting).length };
 }
 function budgetTabs(active) {
-  return '<div class="segment" role="tablist"><a href="#budget"' + (active === 'budget' ? ' aria-current="page"' : '') + '>Shopping</a><a href="#medical"' + (active === 'medical' ? ' aria-current="page"' : '') + '>Medical' + (medTotals().waitingN ? ' · ' + medTotals().waitingN + ' waiting' : '') + '</a></div>';
+  const w = medTotals().waitingN;
+  return '<div class="segment" role="tablist"><a href="#budget"' + (active === 'budget' ? ' aria-current="page"' : '') + '>Shopping</a><a href="#medical"' + (active === 'medical' ? ' aria-current="page"' : '') + '>Medical' + (w ? ' <b class="segBadge">' + w + '</b>' : '') + '</a><a href="#docs"' + (active === 'docs' ? ' aria-current="page"' : '') + '>Documents</a></div>';
 }
 const claimPill = st => { const [label, kind] = CLAIM[st] || CLAIM.unclaimed; return '<span class="claim ' + (st || 'unclaimed') + '">' + (kind === 'waiting' ? '⏳ ' : st === 'rejected' ? '✕ ' : '✓ ') + label + '</span>' };
 function medical() {
@@ -492,7 +493,7 @@ function drawExFiles() {
   const box = $('#exFiles'); if (!box) return;
   box.innerHTML = exDraft.files.map((f, i) => '<span class="fwrap">' + fileThumb(f) + '<button type="button" data-unattach="' + i + '" aria-label="Remove ' + esc(f.name) + '">×</button></span>').join('') +
     exDraft.pending.map((p, i) => '<span class="fwrap">' + (p.url ? '<span class="fthumb"><img src="' + p.url + '" alt=""></span>' : '<span class="fthumb doc">PDF</span>') + '<button type="button" data-unpendex="' + i + '" aria-label="Remove">×</button></span>').join('') +
-    '<label class="exAdd big">' + ICON.clip + '<span>Add invoice or photo</span><input type="file" id="exPick" accept="image/*,application/pdf" multiple hidden></label>';
+    '<label class="exAdd big">' + ICON.clip + '<span>' + (exDraft.label || 'Add invoice or photo') + '</span><input type="file" id="exPick" accept="image/*,application/pdf" multiple hidden></label>';
 }
 async function quickAttach(id, files) {
   const x = byId(id); if (!x || !files.length) return;
@@ -535,6 +536,71 @@ async function saveExpense(form) {
   } catch (e) { err.textContent = e.message; btn.disabled = false }
 }
 
+/* ---------- Medical documents ---------- */
+const DOC_TAGS = ['Scan', 'Blood results', 'Prescription', 'Doctor’s report', 'Hospital', 'Birth plan', 'Medical aid', 'Pre-authorisation', 'Vaccinations', 'Mom', 'Baby'];
+let docQuery = '', docTag = '', docDraftTags = [];
+const docs = () => ofKind('doc').sort((a, b) => (b.data.date || '').localeCompare(a.data.date || '') || b.created_at.localeCompare(a.created_at));
+function docItems() {
+  // Real documents plus the receipts attached to medical expenses, so everything is findable in one place.
+  const real = docs().map(x => ({ id: x.id, kind: 'doc', title: x.data.title, date: x.data.date, tags: x.data.tags || [], note: x.data.note, files: x.data.files || [] }));
+  const receipts = expenses().filter(x => x.data.files?.length).map(x => ({ id: x.id, kind: 'expense', title: x.data.what || 'Medical expense', date: x.data.date, tags: ['Receipt', x.data.type].filter(Boolean), note: [x.data.provider, x.data.total ? money(x.data.total) : ''].filter(Boolean).join(' · '), files: x.data.files }));
+  return [...real, ...receipts].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+function docTagsInUse() { const c = {}; for (const d of docItems()) for (const t of d.tags) c[t] = (c[t] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]) }
+function docMatches() {
+  const words = docQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return docItems().filter(d => (!docTag || d.tags.includes(docTag)) && words.every(w => [d.title, d.note, d.tags.join(' '), d.files.map(f => f.name).join(' ')].join(' ').toLowerCase().includes(w)));
+}
+function docList() {
+  const list = docMatches();
+  if (!list.length) return '<p class="empty">' + (docItems().length ? 'Nothing matches.' : 'No documents yet. Tap + to add scan photos, results, prescriptions or any other medical paperwork.') + '</p>';
+  return '<div class="docGrid">' + list.map(d => '<article class="docCard"><button class="docTap" data-' + (d.kind === 'doc' ? 'doc' : 'expense') + '="' + esc(d.id) + '"><b>' + esc(d.title || 'Untitled') + '</b><small>' + (d.date ? new Date(d.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '') + (d.files.length ? ' · ' + d.files.length + ' file' + (d.files.length === 1 ? '' : 's') : '') + '</small>' + (d.note ? '<span class="docNote">' + esc(d.note) + '</span>' : '') + '</button>' +
+    (d.tags.length ? '<div class="tagRow">' + d.tags.map(t => '<button class="tag' + (t === docTag ? ' on' : '') + '" data-doctag="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' : '') +
+    (d.files.length ? '<div class="exFiles docFiles">' + d.files.slice(0, 6).map(fileThumb).join('') + (d.files.length > 6 ? '<span class="small">+' + (d.files.length - 6) + '</span>' : '') + '</div>' : '') + '</article>').join('') + '</div>';
+}
+function docsScreen() {
+  const tags = docTagsInUse();
+  return head('Budget', 'Scan photos, results, prescriptions and other medical paperwork, tagged so you can find them.') + budgetTabs('docs') +
+    '<label class="searchBox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input id="docSearch" type="search" placeholder="Search titles, notes, tags and file names" value="' + esc(docQuery) + '" autocomplete="off" enterkeyhint="search"></label>' +
+    (tags.length ? '<div class="chips"><button class="chip' + (!docTag ? ' active' : '') + '" data-doctag="">All</button>' + tags.map(([t, n]) => '<button class="chip' + (t === docTag ? ' active' : '') + '" data-doctag="' + esc(t) + '">' + esc(t) + ' <span class="cnt">' + n + '</span></button>').join('') + '</div>' : '') +
+    '<div id="docResults">' + docList() + '</div>';
+}
+function drawTagPick() {
+  const box = $('#tagPick'); if (!box) return;
+  const all = [...new Set([...DOC_TAGS, ...docs().flatMap(x => x.data.tags || []), ...docDraftTags])];
+  box.innerHTML = all.map(t => '<button type="button" class="tag' + (docDraftTags.includes(t) ? ' on' : '') + '" data-tagtoggle="' + esc(t) + '" aria-pressed="' + docDraftTags.includes(t) + '">' + (docDraftTags.includes(t) ? '✓ ' : '') + esc(t) + '</button>').join('');
+}
+function docForm(id) {
+  const x = id ? byId(id) : null, d = x?.data || { date: new Date().toISOString().slice(0, 10) };
+  openDialog(x ? 'Edit document' : 'New document', '<form id="docForm" class="formGrid" data-id="' + esc(id || '') + '">' +
+    '<div class="field wide">Photos and files <small>Take a photo of the paperwork or choose a PDF</small><div class="exFiles inForm" id="exFiles"></div></div>' +
+    '<label class="field wide">Title<input name="title" required maxlength="100" placeholder="e.g. 20-week scan report" value="' + esc(d.title) + '"></label>' +
+    '<label class="field">Date<input name="date" type="date" value="' + esc(d.date) + '"></label>' +
+    '<div class="field wide">Tags <small>Tap to add or remove</small><div class="tagRow" id="tagPick"></div><div class="inlineForm" style="margin-top:6px"><input id="newTag" maxlength="30" placeholder="Add your own tag" enterkeyhint="done"><button type="button" class="ghost" id="addTag">Add</button></div></div>' +
+    '<label class="field wide">Notes <small>Optional</small><textarea name="note" maxlength="1000" rows="3">' + esc(d.note) + '</textarea></label>' +
+    '<p class="error wide" role="alert"></p><div class="formActions wide"><button class="primary">' + (x ? 'Save' : 'Save document') + '</button><button type="button" class="ghost" data-cancel>Cancel</button>' + (x ? '<button type="button" class="ghost danger" data-remove="' + esc(x.id) + '">Delete</button>' : '') + '</div></form>');
+  exDraft.pending.forEach(p => p.url && URL.revokeObjectURL(p.url));
+  exDraft = { files: [...(d.files || [])], pending: [], label: 'Add photo or file' }; docDraftTags = [...(d.tags || (docTag && docTag !== 'Receipt' ? [docTag] : []))];
+  drawExFiles(); drawTagPick();
+}
+function addDraftTag() {
+  const i = $('#newTag'), t = (i?.value || '').trim().replace(/\s+/g, ' ');
+  if (!t) return; const c = t[0].toUpperCase() + t.slice(1);
+  if (!docDraftTags.includes(c)) docDraftTags.push(c); i.value = ''; drawTagPick();
+}
+async function saveDoc(form) {
+  const f = new FormData(form), old = form.dataset.id ? byId(form.dataset.id) : null, btn = form.querySelector('.primary'), err = form.querySelector('.error');
+  if ($('#newTag')?.value.trim()) addDraftTag();
+  const data = { ...(old?.data || {}), title: f.get('title').trim(), date: f.get('date'), tags: [...docDraftTags], note: f.get('note').trim(), files: [...exDraft.files] };
+  btn.disabled = true; err.textContent = '';
+  try {
+    if (exDraft.pending.length) btn.textContent = 'Uploading…';
+    for (const p of exDraft.pending) data.files.push(await uploadFile(p.file));
+    exDraft.pending.forEach(p => p.url && URL.revokeObjectURL(p.url)); exDraft.pending = [];
+    dlg.close(); await put({ id: old?.id || newId(), kind: 'doc', data }); render(); announce(old ? 'Saved' : 'Document saved');
+  } catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Save' }
+}
+
 /* ---------- Settings / app info ---------- */
 function settings() {
   const built = VERSION.build ? new Date(VERSION.build).toLocaleString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -561,20 +627,20 @@ async function unlock(form) {
 /* ---------- Shell ---------- */
 const ALIASES = { compare: 'shop', checklist: 'list' };
 function hashParts() { const [b, ...rest] = location.hash.slice(1).split('/'); let c = ''; try { c = decodeURIComponent(rest.join('/')) } catch {} return [ALIASES[b] || b, c] }
-function route() { const r = hashParts()[0]; return ['home', 'shop', 'offers', 'list', 'ideas', 'budget', 'medical'].includes(r) ? r : 'home' }
+function route() { const r = hashParts()[0]; return ['home', 'shop', 'offers', 'list', 'ideas', 'budget', 'medical', 'docs'].includes(r) ? r : 'home' }
 function goCat(c) { favouritesOnly = false; if (dlg.open) dlg.close(); location.hash = c && c !== 'all' ? '#shop/' + encodeURIComponent(c) : '#shop' }
 function tabLinks() {
-  const r = route(), cur = r === 'offers' ? 'shop' : r === 'medical' ? 'budget' : r, n = ofKind('idea').filter(x => !x.data.filed).length;
+  const r = route(), cur = r === 'offers' ? 'shop' : r === 'medical' || r === 'docs' ? 'budget' : r, n = ofKind('idea').filter(x => !x.data.filed).length;
   return TABS.map(([k, label]) => '<a href="#' + k + '"' + (cur === k ? ' aria-current="page"' : '') + '>' + ICON[k] + '<span>' + label + '</span>' + (k === 'ideas' && n ? '<b class="badge">' + n + '</b>' : '') + '</a>').join('');
 }
 function render() {
   stale = false; const key = route(); if (key === 'shop') category = hashParts()[1] || 'all';
   document.body.classList.toggle('locked', !token); status();
   if (!token) { view.innerHTML = gate(); $('#tabbar').innerHTML = ''; $('#toptabs').innerHTML = ''; $('#fab').classList.add('hidden'); return }
-  view.innerHTML = { home, shop, offers, list: checklist, ideas, budget, medical }[key]();
+  view.innerHTML = { home, shop, offers, list: checklist, ideas, budget, medical, docs: docsScreen }[key]();
   $('#tabbar').innerHTML = $('#toptabs').innerHTML = tabLinks();
-  $('#fab').classList.toggle('hidden', !['shop', 'list', 'ideas', 'medical'].includes(key));
-  $('#fab').setAttribute('aria-label', key === 'shop' ? 'Add an option' : key === 'list' ? 'Add to the checklist' : key === 'medical' ? 'Add a medical expense' : 'New idea');
+  $('#fab').classList.toggle('hidden', !['shop', 'list', 'ideas', 'medical', 'docs'].includes(key));
+  $('#fab').setAttribute('aria-label', key === 'shop' ? 'Add an option' : key === 'list' ? 'Add to the checklist' : key === 'medical' ? 'Add a medical expense' : key === 'docs' ? 'Add a document' : 'New idea');
   if (key !== 'shop') document.body.classList.remove('has-compare');
   document.querySelector('.chips .active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
   if (key === 'ideas') drawPending();
@@ -595,6 +661,10 @@ document.addEventListener('click', e => {
   else if (d.unattach) { exDraft.files.splice(Number(d.unattach), 1); drawExFiles() }
   else if (d.unpendex) { const [p] = exDraft.pending.splice(Number(d.unpendex), 1); p?.url && URL.revokeObjectURL(p.url); drawExFiles() }
   else if (d.medfilter) { medFilter = d.medfilter; rerenderKeep() }
+  else if (d.doc) docForm(d.doc);
+  else if ('doctag' in d) { docTag = d.doctag === docTag && d.doctag ? '' : d.doctag; if (dlg.open) dlg.close(); rerenderKeep() }
+  else if (d.tagtoggle) { const t = d.tagtoggle; docDraftTags = docDraftTags.includes(t) ? docDraftTags.filter(v => v !== t) : [...docDraftTags, t]; drawTagPick() }
+  else if (b.id === 'addTag') addDraftTag();
   else if ('status' in d && d.id) setStatus(d.id, d.status);
   else if (d.notes) notesSheet(d.notes);
   else if (d.quickpick) { const p = byId(d.quickpick); setStatus(p.id, p.data.status === 'chosen' ? '' : 'chosen') }
@@ -605,10 +675,10 @@ document.addEventListener('click', e => {
   else if (d.tooption) ideaToOption(d.tooption);
   else if (d.gocat) goCat(d.gocat);
   else if (d.edit) productForm(d.edit);
-  else if (d.remove) { const x = byId(d.remove); if (x && confirm('Remove “' + (x.data.name || x.data.what || 'this idea') + '” for both of you?')) { if (dlg.open) dlg.close(); removeEntry(d.remove); rerenderKeep() } }
+  else if (d.remove) { const x = byId(d.remove); if (x && confirm('Remove “' + (x.data.name || x.data.what || x.data.title || 'this idea') + '” for both of you?')) { if (dlg.open) dlg.close(); removeEntry(d.remove); rerenderKeep() } }
   else if (d.unpend) { const [p] = pending.splice(Number(d.unpend), 1); p.url && URL.revokeObjectURL(p.url); drawPending() }
   else if ('cancel' in d || b.id === 'close') dlg.close();
-  else if (b.id === 'fab') { const r = route(); if (r === 'shop') productForm(); else if (r === 'list') itemForm(); else if (r === 'medical') expenseForm(); else if (r === 'ideas') { scrollTo({ top: 0, behavior: 'smooth' }); $('#composer textarea')?.focus() } }
+  else if (b.id === 'fab') { const r = route(); if (r === 'shop') productForm(); else if (r === 'list') itemForm(); else if (r === 'medical') expenseForm(); else if (r === 'docs') docForm(); else if (r === 'ideas') { scrollTo({ top: 0, behavior: 'smooth' }); $('#composer textarea')?.focus() } }
   else if (b.id === 'moreOffers') $('#offerRows').insertAdjacentHTML('beforeend', offerInputs());
   else if (b.id === 'compareBtn' && selected.size >= 2) comparison();
   else if (b.id === 'clearCompare') { selected.clear(); rerenderKeep() }
@@ -626,6 +696,7 @@ document.addEventListener('change', e => {
   else if (e.target.id === 'pick') { addPending(e.target.files); e.target.value = '' }
   else if (e.target.id === 'exPick') { for (const file of e.target.files) { if (file.size > 25e6) { announce('That file is too large.'); continue } exDraft.pending.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : '' }) } e.target.value = ''; drawExFiles() }
 });
+document.addEventListener('keydown', e => { if (e.target.id === 'newTag' && e.key === 'Enter') { e.preventDefault(); addDraftTag() } });
 document.addEventListener('submit', e => {
   e.preventDefault(); const form = e.target;
   if (form.id === 'gateForm') unlock(form);
@@ -634,6 +705,7 @@ document.addEventListener('submit', e => {
   else if (form.id === 'boughtForm') setStatus(form.dataset.id, 'bought', Number(form.paid.value) || undefined);
   else if (form.id === 'noteForm') { const t = form.note.value.trim(), p = byId(form.dataset.id); if (t && p) patch(p.id, { notes: [...(p.data.notes || []), { text: t, at: new Date().toISOString() }] }) }
   else if (form.id === 'expenseForm') saveExpense(form);
+  else if (form.id === 'docForm') saveDoc(form);
   else if (form.id === 'budgetForm') { put({ id: 'settings', kind: 'settings', data: { ...(byId('settings')?.data || {}), budget: Number(form.budget.value) || 0 } }); render(); announce('Budget saved') }
   else if (form.matches('.newItem')) {
     const f = new FormData(form), name = f.get('item').trim(); if (!name) return;
@@ -641,6 +713,7 @@ document.addEventListener('submit', e => {
   }
 });
 document.addEventListener('input', e => {
+  if (e.target.id === 'docSearch') { docQuery = e.target.value; const r = $('#docResults'); if (r) r.innerHTML = docList(); return }
   if (e.target.id !== 'shopSearch') return;
   query = e.target.value; const r = $('#shopResults');
   if (r) r.innerHTML = query.trim() ? searchResults() : sections().map(([t, cs]) => '<div class="catSection"><h2>' + esc(t) + '</h2><div class="catGrid">' + cs.map(catTile).join('') + '</div></div>').join('');
